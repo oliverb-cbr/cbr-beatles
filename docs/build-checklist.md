@@ -8,7 +8,7 @@ Do JOHN first and properly. It becomes the reference everything else is compared
 - [ ] Put the vendor installers in the installer share, laid out as in [installers/README.md](../installers/README.md).
 - [ ] Set `Settings.InstallerRoot` in `manifest.psd1` (a folder on the 20 TB drive is fine until the NAS exists).
 - [ ] Make an SSH key for admin use and add its public half to `config/ssh/administrators_authorized_keys`.
-- [ ] Add a read-only **deploy key** for this repo on GitHub (Settings → Deploy keys). `update.ps1` runs `git pull` over SSH sessions, where Windows Credential Manager logins aren't available, so HTTPS sign-in won't work there.
+- [ ] Later, once you want `fleet.ps1 -Action Update`: add a read-only **deploy key** for this repo on GitHub (Settings → Deploy keys) and switch each clone's remote to `git@github.com:oliverb-cbr/cbr-beatles.git`. Updates run over SSH can't use the browser sign-in that the first clone saves.
 
 ## 1. Firmware
 
@@ -26,15 +26,22 @@ Do JOHN first and properly. It becomes the reference everything else is compared
 
 ## 3. Get the repo
 
-In an elevated PowerShell as `cbradmin`:
+In an elevated PowerShell as `cbradmin`. WinGet comes with Windows 11, so it's the only thing you need to start:
 
 ```powershell
 winget install --id Git.Git --exact --scope machine --accept-source-agreements --accept-package-agreements
-# open a new PowerShell so git is on PATH
-New-Item -ItemType Directory C:\CBR
-# copy the deploy key to C:\Users\cbradmin\.ssh\ first
-git clone git@github.com:oliverb-cbr/cbr-beatles.git C:\CBR\cbr-beatles
 ```
+
+Close PowerShell and open a new elevated one so `git` is found, then:
+
+```powershell
+New-Item -ItemType Directory C:\CBR
+git clone https://github.com/oliverb-cbr/cbr-beatles.git C:\CBR\cbr-beatles
+```
+
+The repo is private, so a browser window opens asking you to sign in to GitHub. Git remembers the sign-in for `cbradmin`, so `update.ps1` works when you run it at the machine.
+
+The vendor installers aren't in the repo. Plug in the drive holding them (or connect to the NAS) and check `Settings.InstallerRoot` in the manifest points at it. External drives can get a different letter on each machine, so check it's the same letter everywhere, or set it in Disk Management.
 
 ## 4. Provision
 
