@@ -23,6 +23,7 @@ Accounts on every machine:
 
 | Script | Run as | Does |
 |---|---|---|
+| `bootstrap.bat` | admin, on a fresh machine | Installs Git, downloads this repo to `C:\CBR\cbr-beatles`, optionally runs provision (`bootstrap.bat JOHN`). |
 | `scripts/provision.ps1` | admin | Builds or re-converges a machine. Safe to re-run. |
 | `scripts/update.ps1` | admin | `git pull`, then provision with `-Upgrade` (upgrades `current` apps, moves pinned apps to the manifest version). |
 | `scripts/audit.ps1` | anyone | Read-only report of anything missing or at the wrong version. |

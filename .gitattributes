@@ -3,3 +3,5 @@
 *.ps1  text eol=crlf
 *.psm1 text eol=crlf
 *.psd1 text eol=crlf
+# Stored with Windows line endings as-is, so a raw download from GitHub runs correctly too.
+*.bat  -text

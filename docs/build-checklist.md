@@ -26,24 +26,15 @@ Do JOHN first and properly. It becomes the reference everything else is compared
 
 ## 3. Get the repo
 
-In an elevated PowerShell as `cbradmin`. WinGet comes with Windows 11, so it's the only thing you need to start:
+Copy `bootstrap.bat` from this repo onto the machine: on a USB stick, or open it on GitHub while signed in and use "Download raw file". Log in as `cbradmin` and double-click it, or run `bootstrap.bat JOHN` to go straight on to provisioning.
 
-```powershell
-winget install --id Git.Git --exact --scope machine --accept-source-agreements --accept-package-agreements
-```
-
-Close PowerShell and open a new elevated one so `git` is found, then:
-
-```powershell
-New-Item -ItemType Directory C:\CBR
-git clone https://github.com/oliverb-cbr/cbr-beatles.git C:\CBR\cbr-beatles
-```
-
-The repo is private, so a browser window opens asking you to sign in to GitHub. Git remembers the sign-in for `cbradmin`, so `update.ps1` works when you run it at the machine.
+It asks for admin rights, installs Git with winget (built into Windows 11), creates `C:\CBR` so only admins can change it, and downloads the repo to `C:\CBR\cbr-beatles`. The repo is private, so a browser window opens asking you to sign in to GitHub. Git remembers the sign-in for `cbradmin`, so `update.ps1` works when you run it at the machine. Running `bootstrap.bat` again just updates the repo.
 
 The vendor installers aren't in the repo. Plug in the drive holding them (or connect to the NAS) and check `Settings.InstallerRoot` in the manifest points at it. External drives can get a different letter on each machine, so check it's the same letter everywhere, or set it in Disk Management.
 
 ## 4. Provision
+
+If you didn't pass a machine name to `bootstrap.bat`:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File C:\CBR\cbr-beatles\scripts\provision.ps1 -Machine JOHN
