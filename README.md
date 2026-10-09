@@ -8,7 +8,8 @@ The idea: what a CBR workstation *is* lives in [`manifest.psd1`](manifest.psd1).
 
 | Layer | What | Where it's defined |
 |---|---|---|
-| Windows | Windows 11 Pro on the internal SSD, hostname, accounts, power, update policy, OpenSSH | `scripts/provision.ps1` |
+| Windows install | Windows 11 Pro, UK settings, local `cbradmin`, no Microsoft account | `windows/autounattend.xml` |
+| Windows settings | Hostname, accounts, power, update policy, debloat, privacy, OpenSSH | `scripts/provision.ps1` |
 | Apps | ~36 apps via winget, vendor installers, Unity Hub or by hand | `manifest.psd1` |
 | Linux / AI | WSL2 Ubuntu 24.04 + Docker Engine + NVIDIA container toolkit + uv | `scripts/user-setup.ps1`, `wsl/setup-docker.sh` |
 | Big files | Installers, models, datasets on the NAS (20 TB drive until then) | `Settings.InstallerRoot` in the manifest |

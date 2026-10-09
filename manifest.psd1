@@ -47,6 +47,27 @@
         SharedUser    = 'CBR'           # standard (non-admin) account staff log in with
         WslDistro     = 'Ubuntu-24.04'
         WslUser       = 'cbr'           # Linux user inside the WSL distro
+
+        # Preinstalled Store apps that provision.ps1 removes for all users, including future ones.
+        # Never add Microsoft.DesktopAppInstaller (that's winget) or Microsoft.WindowsStore.
+        # Xbox apps are kept on purpose (Game Bar, game testing).
+        RemoveAppx    = @(
+            'Clipchamp.Clipchamp'
+            'Microsoft.BingNews'
+            'Microsoft.BingSearch'
+            'Microsoft.BingWeather'
+            'Microsoft.Copilot'
+            'Microsoft.GetHelp'
+            'Microsoft.MicrosoftOfficeHub'
+            'Microsoft.MicrosoftSolitaireCollection'
+            'Microsoft.OutlookForWindows'
+            'Microsoft.PowerAutomateDesktop'
+            'Microsoft.Todos'
+            'Microsoft.WindowsFeedbackHub'
+            'Microsoft.YourPhone'
+            'MicrosoftCorporationII.MicrosoftFamily'
+            'MSTeams'
+        )
     }
 
     Apps = @(

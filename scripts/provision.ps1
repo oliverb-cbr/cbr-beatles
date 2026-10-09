@@ -49,6 +49,93 @@ function Set-RegistryValue($Path, $Name, $Value, $Type = 'DWord') {
     Set-ItemProperty -Path $Path -Name $Name -Value $Value -Type $Type
 }
 
+function Remove-Bloat {
+    $provisioned = Get-AppxProvisionedPackage -Online
+    foreach ($name in $settings.RemoveAppx) {
+        try {
+            $found = $false
+            foreach ($p in ($provisioned | Where-Object { $_.DisplayName -eq $name })) {
+                Remove-AppxProvisionedPackage -Online -PackageName $p.PackageName -AllUsers | Out-Null
+                $found = $true
+            }
+            foreach ($p in (Get-AppxPackage -AllUsers -Name $name)) {
+                Remove-AppxPackage -Package $p.PackageFullName -AllUsers
+                $found = $true
+            }
+            if ($found) { Write-Host "Removed $name" }
+        } catch {
+            Write-Warning "Couldn't remove ${name}: $($_.Exception.Message)"
+        }
+    }
+}
+
+function Set-PrivacyPolicies {
+    $policies = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows'
+    # Diagnostic data at the minimum Pro allows ("Required"). 0 (off) only works on Enterprise/Education.
+    Set-RegistryValue "$policies\DataCollection" 'AllowTelemetry' 1
+    Set-RegistryValue "$policies\AdvertisingInfo" 'DisabledByGroupPolicy' 1
+    Set-RegistryValue "$policies\System" 'PublishUserActivities' 0
+    Set-RegistryValue "$policies\System" 'UploadUserActivities' 0
+    Set-RegistryValue "$policies\WindowsAI" 'DisableAIDataAnalysis' 1          # Recall snapshots
+    Set-RegistryValue "$policies\WindowsCopilot" 'TurnOffWindowsCopilot' 1
+    Set-RegistryValue "$policies\CloudContent" 'DisableWindowsConsumerFeatures' 1   # Enterprise/Education only; harmless on Pro
+    Set-RegistryValue 'HKLM:\SOFTWARE\Policies\Microsoft\Dsh' 'AllowNewsAndInterests' 0   # Widgets
+    # Also set by the answer file; repeated here for machines installed without it.
+    Set-RegistryValue 'HKLM:\SYSTEM\CurrentControlSet\Control\BitLocker' 'PreventDeviceEncryption' 1
+}
+
+# Explorer, Start and suggestion settings that only exist per user. $Root is a registry path
+# to the top of a user's hive, e.g. 'HKCU:' or 'Registry::HKEY_USERS\CBR_DEFAULT'.
+function Set-UserSettings([string]$Root) {
+    $cv = "$Root\Software\Microsoft\Windows\CurrentVersion"
+    Set-RegistryValue "$cv\Explorer\Advanced" 'HideFileExt' 0                    # show file extensions
+    Set-RegistryValue "$cv\Explorer\Advanced" 'Start_IrisRecommendations' 0      # no Start menu promotions
+    Set-RegistryValue "$cv\Search" 'SearchboxTaskbarMode' 1                      # search icon, not the box
+    Set-RegistryValue "$Root\Software\Policies\Microsoft\Windows\Explorer" 'DisableSearchBoxSuggestions' 1   # no Bing in Start search
+    # Stop Windows quietly installing promoted apps and showing tips and adverts.
+    $cdm = "$cv\ContentDeliveryManager"
+    foreach ($v in 'ContentDeliveryAllowed', 'OemPreInstalledAppsEnabled', 'PreInstalledAppsEnabled', 'SilentInstalledAppsEnabled',
+                   'SoftLandingEnabled', 'SystemPaneSuggestionsEnabled', 'SubscribedContent-338388Enabled',
+                   'SubscribedContent-338389Enabled', 'SubscribedContent-353694Enabled', 'SubscribedContent-353696Enabled') {
+        Set-RegistryValue $cdm $v 0
+    }
+    Remove-ItemProperty "$cv\Run" -Name 'OneDriveSetup' -ErrorAction SilentlyContinue
+}
+
+# Runs Set-UserSettings against a hive file that isn't loaded (a signed-out user, or the Default
+# profile that new accounts are copied from).
+function Set-UserSettingsInHiveFile([string]$HiveFile) {
+    $mount = 'CBR_HIVE'
+    & reg.exe load "HKU\$mount" $HiveFile | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Couldn't load $HiveFile" }
+    try { Set-UserSettings "Registry::HKEY_USERS\$mount" }
+    finally {
+        # Registry handles from the provider must be released before the hive can unload.
+        [gc]::Collect(); [gc]::WaitForPendingFinalizers()
+        & reg.exe unload "HKU\$mount" | Out-Null
+    }
+}
+
+function Set-AllUserSettings {
+    try {
+        Set-UserSettingsInHiveFile 'C:\Users\Default\NTUSER.DAT'
+        Write-Host 'Default profile (applies to accounts that sign in for the first time).'
+    } catch { $failures.Add("Default profile settings: $($_.Exception.Message)") }
+
+    $shared = Get-LocalUser -Name $settings.SharedUser -ErrorAction SilentlyContinue
+    if ($shared) {
+        $userProfile = Get-CimInstance Win32_UserProfile | Where-Object { $_.SID -eq $shared.SID.Value }
+        try {
+            if (-not $userProfile) { Write-Host "$($settings.SharedUser) hasn't signed in yet; the Default profile covers it." }
+            elseif ($userProfile.Loaded) { Set-UserSettings "Registry::HKEY_USERS\$($shared.SID.Value)"; Write-Host "$($settings.SharedUser) (signed in)." }
+            else { Set-UserSettingsInHiveFile (Join-Path $userProfile.LocalPath 'NTUSER.DAT'); Write-Host "$($settings.SharedUser)." }
+        } catch { $failures.Add("$($settings.SharedUser) settings: $($_.Exception.Message)") }
+    }
+
+    Set-UserSettings 'HKCU:'
+    Write-Host "$env:USERNAME (this account). Sign out and back in to see Explorer changes."
+}
+
 function Invoke-SystemConfig {
     Write-Step "Hostname"
     if ($env:COMPUTERNAME -ne $machineEntry.ComputerName) {
@@ -94,6 +181,15 @@ function Invoke-SystemConfig {
         & winget uninstall --id Microsoft.OneDrive --exact --silent --accept-source-agreements --disable-interactivity
         Reset-InstalledProgramsCache
     } else { Write-Host "Not installed." }
+
+    Write-Step "Remove preinstalled Store apps (Settings.RemoveAppx in the manifest)"
+    Remove-Bloat
+
+    Write-Step "Privacy and advert settings (machine-wide policies)"
+    Set-PrivacyPolicies
+
+    Write-Step "Per-user settings: new accounts, '$($settings.SharedUser)' and this account"
+    Set-AllUserSettings
 
     Write-Step "WSL platform (distros are installed per user by user-setup.ps1)"
     $vmp = Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform

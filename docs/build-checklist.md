@@ -19,8 +19,9 @@ Do JOHN first and properly. It becomes the reference everything else is compared
 
 ## 2. Windows
 
-- [ ] Clean install of Windows 11 Pro on the internal SSD.
-- [ ] During setup create a **local** account `cbradmin` (no Microsoft account).
+- [ ] Make the install USB with the answer file: see [windows/README.md](../windows/README.md) (Ventoy or Rufus, "English International" ISO).
+- [ ] Unplug the external NVMe and 20 TB drive, boot the USB, and choose the internal SSD when Setup asks. Everything else is answered for you: Windows 11 Pro, UK settings, no Microsoft account, local admin `cbradmin` with password `ChangeMe-CBR1`.
+- [ ] Sign in as `cbradmin`. At the next sign-in Windows makes you set a real password. Use the same one on all four.
 - [ ] Run Windows Update until there's nothing left.
 - [ ] Install chipset and network drivers from the motherboard vendor if Windows didn't get them.
 

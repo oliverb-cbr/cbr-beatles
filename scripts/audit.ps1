@@ -21,6 +21,13 @@ try { $vmp = [string](Get-WindowsOptionalFeature -Online -FeatureName VirtualMac
 catch { $vmp = 'unknown (run as admin)' }
 $wuDrivers = (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' -ErrorAction SilentlyContinue).ExcludeWUDriversInQualityUpdate
 $oneDrive = Get-InstalledPrograms | Where-Object { $_.DisplayName -like 'Microsoft OneDrive*' }
+$telemetry = (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection' -ErrorAction SilentlyContinue).AllowTelemetry
+try {
+    $leftover = @(Get-AppxProvisionedPackage -Online | Where-Object { $manifest.Settings.RemoveAppx -contains $_.DisplayName })
+    $bloat = if ($leftover.Count) { ($leftover.DisplayName -join ', ') } else { 'none' }
+} catch { $bloat = 'unknown (run as admin)' }
+try { $encryption = [string](Get-BitLockerVolume -MountPoint $env:SystemDrive).VolumeStatus }
+catch { $encryption = 'unknown (run as admin)' }
 
 function New-Check($Name, $Value, $Ok) {
     [pscustomobject]@{ Name = $Name; Value = [string]$Value; Status = $(if ($Ok) { 'OK' } else { 'CHECK' }) }
@@ -31,6 +38,9 @@ $checks = @(
     New-Check 'Windows' "$($os.Caption) $($os.Version)" $true
     New-Check 'WSL platform' $vmp ($vmp -eq 'Enabled')
     New-Check 'WU driver updates blocked' $wuDrivers ($wuDrivers -eq 1)
+    New-Check 'Telemetry at minimum' $telemetry ($telemetry -eq 1)
+    New-Check 'Preinstalled apps removed' $bloat ($bloat -eq 'none')
+    New-Check 'System drive not encrypted' $encryption ($encryption -eq 'FullyDecrypted')
     New-Check 'OneDrive removed' $(if ($oneDrive) { 'installed' } else { 'absent' }) (-not $oneDrive)
     New-Check 'sshd running' (Get-Service sshd -ErrorAction SilentlyContinue).Status ((Get-Service sshd -ErrorAction SilentlyContinue).Status -eq 'Running')
 )

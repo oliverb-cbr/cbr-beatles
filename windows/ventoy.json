@@ -1,0 +1,10 @@
+{
+    "auto_install": [
+        {
+            "parent": "/ISO/Windows11",
+            "template": [
+                "/ventoy/script/cbr-autounattend.xml"
+            ]
+        }
+    ]
+}
