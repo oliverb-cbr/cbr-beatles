@@ -44,7 +44,9 @@ if not exist "%GIT%" (
 
 rem ---- C:\CBR: staff can read the scripts, only admins can change them ----------------------
 if not exist "%ROOT%" mkdir "%ROOT%"
-icacls "%ROOT%" /inheritance:r /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" "Users:(OI)(CI)RX" /T /Q >nul
+rem Permissions go on C:\CBR itself; everything inside just inherits them.
+icacls "%ROOT%" /inheritance:r /grant:r "Administrators:(OI)(CI)F" "SYSTEM:(OI)(CI)F" "Users:(OI)(CI)RX" /Q >nul
+icacls "%ROOT%\*" /reset /T /C /Q >nul 2>&1
 
 "%GIT%" config --system --get-all safe.directory 2>nul | findstr /i /x "C:/CBR/cbr-beatles" >nul
 if errorlevel 1 "%GIT%" config --system --add safe.directory C:/CBR/cbr-beatles

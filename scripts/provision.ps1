@@ -175,9 +175,16 @@ function Invoke-SystemConfig {
     }
 
     Invoke-Step "Repo folder permissions (staff can read the scripts, only admins can change them)" {
+        # Set the permissions on C:\CBR itself only, then make everything inside inherit them.
+        # (Granting them file by file with icacls /T left files unreadable, even to admins.)
         $root = Split-Path $settings.RepoPath -Parent
-        & icacls $root /inheritance:r /grant:r 'Administrators:(OI)(CI)F' 'SYSTEM:(OI)(CI)F' 'Users:(OI)(CI)RX' /T /Q | Out-Null
-        if ($LASTEXITCODE -ne 0) { $failures.Add('icacls on repo folder') }
+        & icacls $root /inheritance:r /grant:r 'Administrators:(OI)(CI)F' 'SYSTEM:(OI)(CI)F' 'Users:(OI)(CI)RX' /Q | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Setting permissions on $root failed (icacls exit $LASTEXITCODE)" }
+        & icacls "$root\*" /reset /T /C /Q | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Resetting permissions inside $root failed (icacls exit $LASTEXITCODE)" }
+        # Git needs to read its own files; fail loudly here rather than at the next update.
+        Get-Content (Join-Path $settings.RepoPath '.git\HEAD') -ErrorAction Stop | Out-Null
+        Write-Host 'Done; the repo is still readable.'
     }
 
     Invoke-Step "Shared staff account '$($settings.SharedUser)'" {
