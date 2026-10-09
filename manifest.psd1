@@ -130,7 +130,7 @@
 
         # ---- Hardware and vendor tools ---------------------------------------------------
         # Version is the driver number, e.g. '581.57'. Test a new one on JOHN, then change it here.
-        @{ Name = 'NVIDIA driver';   Method = 'installer'; Installer = 'NVIDIA\driver.exe'; Args = '-s -noreboot -noeula'; Policy = 'pinned'; Version = $null; Detect = 'nvidia-driver' }
+        @{ Name = 'NVIDIA driver';   Method = 'installer'; Installer = 'NVIDIA\driver.exe'; Args = '-s -noreboot -noeula'; Policy = 'pinned'; Version = '617.42'; Detect = 'nvidia-driver' }
         @{ Name = 'Insta360 Studio';   Method = 'installer'; Installer = 'Insta360\Insta360Studio.exe';   Args = $null; Policy = 'pinned'; Version = $null; Detect = 'Insta360 Studio*' }
         @{ Name = 'Insta360 Stitcher'; Method = 'installer'; Installer = 'Insta360\Insta360Stitcher.exe'; Args = $null; Policy = 'pinned'; Version = $null; Detect = 'Insta360*Stitcher*' }
         @{ Name = 'LCC Studio';      Method = 'installer'; Installer = 'LCC\LCCStudio.exe';          Args = $null; Policy = 'pinned'; Version = $null; Detect = 'LCC*' }
