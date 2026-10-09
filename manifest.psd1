@@ -25,7 +25,8 @@
 #   Override  Replaces the installer's own arguments (used for Visual Studio workloads).
 #
 # installer-only fields
-#   Installer Path relative to Settings.InstallerRoot.
+#   Installer Folder under Settings.InstallerRoot holding this app's installer, under its original
+#             name. Exactly one .exe or .msi directly inside; keep older ones in a subfolder like old\.
 #   Args      Silent-install arguments. $null = run the installer interactively and wait.
 #   Sha256    Optional; checked before running when set.
 
@@ -110,9 +111,9 @@
         @{ Name = 'Blender';         Method = 'winget'; Id = 'BlenderFoundation.Blender';   Policy = 'pinned'; Version = $null; Detect = 'Blender*' }
         @{ Name = 'OBS Studio';      Method = 'winget'; Id = 'OBSProject.OBSStudio';        Policy = 'pinned'; Version = $null; Detect = 'OBS Studio' }
         @{ Name = 'CloudCompare';    Method = 'winget'; Id = 'CloudCompare.CloudCompare';   Policy = 'pinned'; Version = $null; Detect = 'CloudCompare*'; Scope = '' }
-        @{ Name = 'TouchDesigner';   Method = 'installer'; Installer = 'TouchDesigner\TouchDesigner.exe';  Args = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'; Policy = 'pinned'; Version = $null; Detect = 'TouchDesigner*' }
+        @{ Name = 'TouchDesigner';   Method = 'installer'; Installer = 'TouchDesigner';  Args = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'; Policy = 'pinned'; Version = $null; Detect = 'TouchDesigner*' }
         # Silent arguments for Resolve's installer: check on JOHN before relying on them.
-        @{ Name = 'DaVinci Resolve'; Method = 'installer'; Installer = 'DaVinciResolve\DaVinci_Resolve_Windows.exe'; Args = '/i /q /noreboot'; Policy = 'pinned'; Version = $null; Detect = 'DaVinci Resolve*' }
+        @{ Name = 'DaVinci Resolve'; Method = 'installer'; Installer = 'DaVinciResolve'; Args = '/i /q /noreboot'; Policy = 'pinned'; Version = $null; Detect = 'DaVinci Resolve*' }
 
         # ---- Game engines and Epic tools -------------------------------------------------
         @{ Name = 'Epic Games Launcher'; Method = 'winget'; Id = 'EpicGames.EpicGamesLauncher'; Policy = 'current'; Detect = 'Epic Games Launcher' }
@@ -130,12 +131,12 @@
 
         # ---- Hardware and vendor tools ---------------------------------------------------
         # Version is the driver number, e.g. '581.57'. Test a new one on JOHN, then change it here.
-        @{ Name = 'NVIDIA driver';   Method = 'installer'; Installer = 'NVIDIA\driver.exe'; Args = '-s -noreboot -noeula'; Policy = 'pinned'; Version = '617.42'; Detect = 'nvidia-driver' }
-        @{ Name = 'Insta360 Studio';   Method = 'installer'; Installer = 'Insta360\Insta360Studio.exe';   Args = $null; Policy = 'pinned'; Version = $null; Detect = 'Insta360 Studio*' }
-        @{ Name = 'Insta360 Stitcher'; Method = 'installer'; Installer = 'Insta360\Insta360Stitcher.exe'; Args = $null; Policy = 'pinned'; Version = $null; Detect = 'Insta360*Stitcher*' }
-        @{ Name = 'LCC Studio';      Method = 'installer'; Installer = 'LCC\LCCStudio.exe';          Args = $null; Policy = 'pinned'; Version = $null; Detect = 'LCC*' }
-        @{ Name = 'Meta Quest Developer Hub'; Method = 'installer'; Installer = 'Meta\MQDH.exe';     Args = $null; Policy = 'current'; Detect = 'Meta Quest Developer Hub*' }
-        @{ Name = 'VIVE Mars';       Method = 'installer'; Installer = 'VIVE\ViveMars.exe';          Args = $null; Policy = 'pinned'; Version = $null; Detect = '*Mars*' }
+        @{ Name = 'NVIDIA driver';   Method = 'installer'; Installer = 'NVIDIA'; Args = '-s -noreboot -noeula'; Policy = 'pinned'; Version = '617.42'; Detect = 'nvidia-driver' }
+        @{ Name = 'Insta360 Studio';   Method = 'installer'; Installer = 'Insta360Studio';   Args = $null; Policy = 'pinned'; Version = $null; Detect = 'Insta360 Studio*' }
+        @{ Name = 'Insta360 Stitcher'; Method = 'installer'; Installer = 'Insta360Stitcher'; Args = $null; Policy = 'pinned'; Version = $null; Detect = 'Insta360*Stitcher*' }
+        @{ Name = 'LCC Studio';      Method = 'installer'; Installer = 'LCC';          Args = $null; Policy = 'pinned'; Version = $null; Detect = 'LCC*' }
+        @{ Name = 'Meta Quest Developer Hub'; Method = 'installer'; Installer = 'Meta';     Args = $null; Policy = 'current'; Detect = 'Meta Quest Developer Hub*' }
+        @{ Name = 'VIVE Mars';       Method = 'installer'; Installer = 'VIVE';          Args = $null; Policy = 'pinned'; Version = $null; Detect = '*Mars*' }
         # Kinect v2 SDK left out on purpose (no hardware). Add it here if that changes.
     )
 }

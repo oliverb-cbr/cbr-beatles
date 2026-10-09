@@ -270,6 +270,19 @@ function Install-WingetApp($App, $Status) {
     }
 }
 
+# Installer in the manifest is a folder: use the one .exe or .msi directly inside it, whatever it's
+# called. Older versions can sit in a subfolder (e.g. old\) without getting in the way.
+function Resolve-VendorInstaller([string]$Path) {
+    if (-not (Test-Path $Path)) { throw "Installer folder not found: $Path" }
+    if (-not (Test-Path $Path -PathType Container)) { return $Path }
+    $found = @(Get-ChildItem $Path -File | Where-Object { $_.Extension -eq '.exe' -or $_.Extension -eq '.msi' })
+    if ($found.Count -eq 0) { throw "No .exe or .msi in $Path" }
+    if ($found.Count -gt 1) {
+        throw "More than one installer in ${Path}: $(($found | ForEach-Object Name) -join ', '). Move the ones you don't want into an old\ subfolder."
+    }
+    $found[0].FullName
+}
+
 function Install-VendorApp($App, $Status) {
     if ($Status.Status -eq 'OK' -or $Status.Status -eq 'UNPINNED') { return }
     if (-not $script:InstallerRootPath) {
@@ -278,8 +291,8 @@ function Install-VendorApp($App, $Status) {
         if (-not $script:InstallerRootPath) { throw "Installer folder '$wanted' not found on any drive. Plug in the install USB." }
         Write-Host "Using installers in $($script:InstallerRootPath)"
     }
-    $path = Join-Path $script:InstallerRootPath $App.Installer
-    if (-not (Test-Path $path)) { throw "Installer not found: $path" }
+    $path = Resolve-VendorInstaller (Join-Path $script:InstallerRootPath $App.Installer)
+    Write-Host "Installer: $path"
     if ($App.Sha256) {
         $hash = (Get-FileHash $path -Algorithm SHA256).Hash
         if ($hash -ne $App.Sha256) { throw "SHA-256 mismatch for $path" }
