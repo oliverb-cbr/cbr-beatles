@@ -38,6 +38,8 @@ $checks = @(
     New-Check 'Windows' "$($os.Caption) $($os.Version)" $true
     New-Check 'WSL platform' $vmp ($vmp -eq 'Enabled')
     New-Check 'WU driver updates blocked' $wuDrivers ($wuDrivers -eq 1)
+    New-Check 'Time zone' (Get-TimeZone).Id ((Get-TimeZone).Id -eq $manifest.Settings.TimeZone)
+    New-Check 'System locale' (Get-WinSystemLocale).Name ((Get-WinSystemLocale).Name -eq $manifest.Settings.Locale)
     New-Check 'Telemetry at minimum' $telemetry ($telemetry -eq 1)
     New-Check 'Preinstalled apps removed' $bloat ($bloat -eq 'none')
     New-Check 'System drive not encrypted' $encryption ($encryption -eq 'FullyDecrypted')

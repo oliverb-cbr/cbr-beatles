@@ -136,6 +136,20 @@ function Set-AllUserSettings {
     Write-Host "$env:USERNAME (this account). Sign out and back in to see Explorer changes."
 }
 
+function Set-RegionalSettings {
+    Set-TimeZone -Id $settings.TimeZone
+    Set-WinHomeLocation -GeoId $settings.GeoId
+    if ((Get-WinSystemLocale).Name -ne $settings.Locale) {
+        Set-WinSystemLocale -SystemLocale $settings.Locale
+        $script:RebootNeeded = $true
+    }
+    # Formats and keyboard for this account, then copied to the sign-in screen and new accounts.
+    Set-Culture $settings.Locale
+    Set-WinUserLanguageList -LanguageList $settings.Locale -Force
+    Copy-UserInternationalSettingsToSystem -WelcomeScreen $true -NewUser $true
+    Write-Host "$($settings.TimeZone), $($settings.Locale) formats and keyboard."
+}
+
 function Invoke-SystemConfig {
     Write-Step "Hostname"
     if ($env:COMPUTERNAME -ne $machineEntry.ComputerName) {
@@ -161,6 +175,9 @@ function Invoke-SystemConfig {
         if ($isAdmin) { Write-Warning "$($settings.SharedUser) is an administrator. It should be a standard user." }
         else { Write-Host "Exists, standard user." }
     }
+
+    Write-Step "Region: UK time zone, formats and keyboard"
+    try { Set-RegionalSettings } catch { $failures.Add("Regional settings: $($_.Exception.Message)") }
 
     Write-Step "Power: no sleep on AC, no hibernation or Fast Startup, High performance plan"
     & powercfg /hibernate off
