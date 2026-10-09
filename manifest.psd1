@@ -41,8 +41,8 @@
 
     Settings = @{
         RepoPath      = 'C:\CBR\cbr-beatles'
-        # TODO: point at the NAS once it exists. Until then a folder on the 20 TB drive works.
-        InstallerRoot = '\\CBR-NAS\deploy\installers'
+        # The 20 TB drive, set to T: on every machine in Disk Management. Change to the NAS share when it exists.
+        InstallerRoot = 'T:\deploy\installers'
         AdminUser     = 'cbradmin'      # local admin, created during Windows setup
         SharedUser    = 'CBR'           # standard (non-admin) account staff log in with
         WslDistro     = 'Ubuntu-24.04'
