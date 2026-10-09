@@ -7,7 +7,7 @@
 - Creates the local admin `cbradmin` with the temporary password `ChangeMe-CBR1`. Windows makes you choose a real password at the second sign-in. (This file is in Git, so treat that password as public.)
 - Turns off the automatic drive encryption Windows 11 now applies, which would get in the way of disk images.
 
-You still choose the disk yourself. That's deliberate: with the external NVMe or 20 TB drive plugged in, the internal SSD isn't always disk 0, and an answer file that wipes "disk 0" could wipe the wrong drive. Unplug the external drives while installing anyway.
+You still choose the disk yourself. That's deliberate: with external drives plugged in, the internal SSD isn't always disk 0, and an answer file that wipes "disk 0" could wipe the wrong drive. Unplug any other external drives while installing anyway.
 
 Debloat and privacy settings aren't in here. `scripts/provision.ps1` applies them, so they're re-applied on every update and checked by the audit.
 
@@ -18,6 +18,7 @@ Debloat and privacy settings aren't in here. `scripts/provision.ps1` applies the
 1. Put the ISO in an `ISO\Windows11` folder on the Ventoy drive.
 2. Copy `autounattend.xml` to `ventoy\script\cbr-autounattend.xml` on the Ventoy drive.
 3. Copy `ventoy.json` to `ventoy\ventoy.json` (merge it in if you already have one).
+   While you're there, put `bootstrap.bat` and the `cbr-deploy\installers` folder (see [installers/README.md](../installers/README.md)) on the stick too, so one USB has everything.
 4. Boot the stick and pick the Windows ISO. Ventoy asks whether to use the CBR template. Choose it.
 
 ## On a USB stick with Rufus

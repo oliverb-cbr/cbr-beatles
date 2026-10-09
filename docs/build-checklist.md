@@ -38,9 +38,11 @@ Full details in [windows/README.md](../windows/README.md). With Ventoy:
 - [ ] Copy `windows\ventoy.json` to `ventoy\ventoy.json` (merge if you already have one).
 - [ ] Also copy `bootstrap.bat` onto the stick, so it's to hand on each machine.
 
-### The installer folder on the 20 TB drive
+### The installer folder on the USB
 
-- [ ] Create `deploy\installers\` on the 20 TB drive and download each vendor installer into it, renamed as listed in [installers/README.md](../installers/README.md):
+Everything for the build lives on the 128 GB install USB: the Windows ISO, the answer file, `bootstrap.bat` and the vendor installers. Together they come to roughly 25 GB.
+
+- [ ] Create `cbr-deploy\installers\` at the root of the USB and download each vendor installer into it, renamed as listed in [installers/README.md](../installers/README.md):
   - NVIDIA Studio driver for the RTX 5090
   - TouchDesigner
   - DaVinci Resolve
@@ -48,7 +50,7 @@ Full details in [windows/README.md](../windows/README.md). With Ventoy:
   - LCC Studio
   - Meta Quest Developer Hub
   - VIVE Mars
-- [ ] The manifest expects the drive as **`T:`** on every machine (`Settings.InstallerRoot = 'T:\deploy\installers'`). You'll set that letter on each machine in Disk Management. Change it in the manifest if you'd rather use another letter, and again when the NAS arrives.
+- [ ] Nothing to configure: provisioning looks for a `cbr-deploy\installers` folder on every drive, so it finds the USB whatever letter it gets. Just keep the USB plugged in while provisioning.
 
 ### Accounts and keys
 
@@ -116,7 +118,7 @@ On the PC where you turned on Hyper-V. If that PC is one of the four workstation
    powershell -ExecutionPolicy Bypass -File C:\CBR\cbr-beatles\scripts\user-setup.ps1
    ```
 
-**Expected to fail in the VM**, so ignore these: the NVIDIA driver, the vendor installers (there's no `T:` drive), and the final GPU check in `user-setup.ps1`.
+**Expected to fail in the VM**, so ignore these: the NVIDIA driver, the vendor installers (Hyper-V VMs can't see USB sticks), and the final GPU check in `user-setup.ps1`.
 
 **Everything else should work**: Windows settings, debloat, all the WinGet apps, WSL and Docker, and the audit.
 
@@ -142,7 +144,7 @@ Restore-VMCheckpoint -VMName CBR-Test -Name 'clean base' -Confirm:$false
 
 ### Windows
 
-- [ ] **Unplug the external NVMe and the 20 TB drive.**
+- [ ] **Unplug every external drive except the install USB.**
 - [ ] Boot the Ventoy USB, pick the Windows ISO, and choose the CBR template when Ventoy asks.
 - [ ] When Setup asks for a disk, choose the internal SSD and delete its old partitions.
 - [ ] Sign in as `cbradmin` / `ChangeMe-CBR1`. Run **Check for updates** until nothing's left. Set the real `cbradmin` password when asked (use the same one on all four).
@@ -150,11 +152,10 @@ Restore-VMCheckpoint -VMName CBR-Test -Name 'clean base' -Confirm:$false
 
 ### Safety image
 
-- [ ] Take a full disk image onto the 20 TB drive with Veeam Agent for Windows (free) or Clonezilla. Call it `JOHN-base`. If anything below goes badly, restoring this takes 10 to 20 minutes.
+- [ ] Take a full disk image onto the install USB with Veeam Agent for Windows (free). Call it `JOHN-base`. A fresh Windows image is about 20 to 30 GB, so it fits alongside everything else. If anything below goes badly, restoring it takes 10 to 20 minutes. (Ventoy sticks are formatted exFAT; if Veeam won't save there, skip the image. Reinstalling Windows from the USB is the fallback, just slower.)
 
 ### Provision
 
-- [ ] Plug in the 20 TB drive and set its letter to `T:` in Disk Management (right-click the volume → Change Drive Letter and Paths).
 - [ ] Run `bootstrap.bat JOHN` from the USB stick. Click through the installers that open on their own (Insta360, LCC, VIVE Mars, MQDH).
 - [ ] Reboot when asked, then run `provision.ps1` again (command in phase 2).
 
@@ -179,7 +180,6 @@ Restore-VMCheckpoint -VMName CBR-Test -Name 'clean base' -Confirm:$false
 
 - [ ] Run `scripts\audit.ps1`. Every pinned app shows `UNPINNED` with its installed version. Copy those versions into `Version` in `manifest.psd1`, commit and push.
 - [ ] Run `scripts\update.ps1`. The audit should now be all OK.
-- [ ] Take a second image: `JOHN-known-good`.
 
 ---
 
@@ -188,9 +188,12 @@ Restore-VMCheckpoint -VMName CBR-Test -Name 'clean base' -Confirm:$false
 For each machine, follow phase 3 with its own name (`bootstrap.bat PAUL` and so on):
 
 - [ ] Firmware: same BIOS version and settings as JOHN.
-- [ ] Windows, then **Check for updates**, then `T:` for the 20 TB drive.
+- [ ] Windows, then **Check for updates**.
 - [ ] `bootstrap.bat <NAME>`, reboot, provision again.
-- [ ] Unreal: copy `C:\Program Files\Epic Games\UE_5.6` from JOHN (via the 20 TB drive), then in the Epic launcher choose Install and point it at that folder. It should check the files rather than download 50+ GB. Try it on PAUL first.
+- [ ] Unreal: either let the Epic launcher download it (50+ GB), or copy it from JOHN over the network using the SSH server provisioning set up, then in the Epic launcher choose Install and point it at the copied folder so it checks the files instead of downloading. Try that on PAUL first:
+  ```powershell
+  scp -r "cbradmin@CBR-JOHN:C:/Program Files/Epic Games/UE_5.6" "C:/Program Files/Epic Games/"
+  ```
 - [ ] RealityScan and Unity as on JOHN.
 - [ ] As `CBR`: `user-setup.ps1`, then sign in to the shared accounts.
 - [ ] A quick smoke test: open one project in each of the main apps.
@@ -212,5 +215,5 @@ Every row should match across the four machines. Rows marked `<<` differ.
 - [ ] **Remote updates**: add a read-only deploy key for this repo on GitHub (Settings → Deploy keys) and switch each machine's copy of the repo to `git@github.com:oliverb-cbr/cbr-beatles.git`. Until then, `fleet.ps1` can audit remotely but updates have to be run at each machine. (Updates over SSH can't use the browser sign-in that `bootstrap.bat` saves.)
 - [ ] **Routine**: every few weeks, run `fleet.ps1` to check for drift and `fleet.ps1 -Action Update` (or `update.ps1` at each machine) to update apps. Windows updates itself.
 - [ ] **New version of a pinned app**: test it on JOHN, change `Version` in the manifest, commit, push, update the rest.
-- [ ] **NAS**: when it arrives, move `deploy\installers` onto it and change `Settings.InstallerRoot`.
+- [ ] **NAS**: if one arrives, copy `cbr-deploy\installers` onto it and set `Settings.InstallerRoot` to the share's full path, e.g. `\\CBR-NAS\cbr-deploy\installers`.
 - [ ] **Deep Freeze**: add it if staff changes start causing problems.

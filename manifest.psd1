@@ -25,7 +25,7 @@
 #   Override  Replaces the installer's own arguments (used for Visual Studio workloads).
 #
 # installer-only fields
-#   Installer Path relative to InstallerRoot.
+#   Installer Path relative to Settings.InstallerRoot.
 #   Args      Silent-install arguments. $null = run the installer interactively and wait.
 #   Sha256    Optional; checked before running when set.
 
@@ -41,8 +41,9 @@
 
     Settings = @{
         RepoPath      = 'C:\CBR\cbr-beatles'
-        # The 20 TB drive, set to T: on every machine in Disk Management. Change to the NAS share when it exists.
-        InstallerRoot = 'T:\deploy\installers'
+        # Vendor installers. A relative path is searched for at the root of every drive, so this finds
+        # the folder on the install USB whatever letter it gets. A full path (e.g. a NAS share) also works.
+        InstallerRoot = 'cbr-deploy\installers'
         AdminUser     = 'cbradmin'      # local admin, created during Windows setup
         SharedUser    = 'CBR'           # standard (non-admin) account staff log in with
         WslDistro     = 'Ubuntu-24.04'

@@ -12,7 +12,7 @@ The idea: what a CBR workstation *is* lives in [`manifest.psd1`](manifest.psd1).
 | Windows settings | Hostname, accounts, power, update policy, debloat, privacy, OpenSSH | `scripts/provision.ps1` |
 | Apps | ~36 apps via winget, vendor installers, Unity Hub or by hand | `manifest.psd1` |
 | Linux / AI | WSL2 Ubuntu 24.04 + Docker Engine + NVIDIA container toolkit + uv | `scripts/user-setup.ps1`, `wsl/setup-docker.sh` |
-| Big files | Installers, models, datasets on the NAS (20 TB drive until then) | `Settings.InstallerRoot` in the manifest |
+| Installers | Vendor installers on the install USB, found on any drive letter | `Settings.InstallerRoot` in the manifest |
 
 Accounts on every machine:
 

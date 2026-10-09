@@ -9,6 +9,22 @@ function Get-CbrManifest {
     Import-PowerShellDataFile (Join-Path $script:RepoRoot 'manifest.psd1')
 }
 
+# Finds the vendor installer folder. A rooted path is used as-is; a relative one (the default,
+# 'cbr-deploy\installers') is looked for at the root of every drive, so the install USB is found
+# whatever letter it gets. Returns $null if it isn't anywhere.
+function Resolve-InstallerRoot([string]$Path) {
+    if ([IO.Path]::IsPathRooted($Path)) {
+        if (Test-Path $Path -ErrorAction SilentlyContinue) { return $Path }
+        return $null
+    }
+    foreach ($drive in Get-PSDrive -PSProvider FileSystem) {
+        if ($drive.Root -notmatch '^[A-Za-z]:\\$') { continue }
+        $candidate = Join-Path $drive.Root $Path
+        if (Test-Path $candidate -ErrorAction SilentlyContinue) { return $candidate }
+    }
+    $null
+}
+
 function Test-IsAdmin {
     $id = [Security.Principal.WindowsIdentity]::GetCurrent()
     (New-Object Security.Principal.WindowsPrincipal $id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)

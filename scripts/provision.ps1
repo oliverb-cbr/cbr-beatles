@@ -16,7 +16,9 @@ param(
     [string]$Machine,
     [switch]$Upgrade,
     [switch]$SkipSystem,
-    [switch]$SkipApps
+    [switch]$SkipApps,
+    # Overrides Settings.InstallerRoot, e.g. -InstallerRoot E:\cbr-deploy\installers
+    [string]$InstallerRoot
 )
 
 $ErrorActionPreference = 'Stop'
@@ -270,7 +272,13 @@ function Install-WingetApp($App, $Status) {
 
 function Install-VendorApp($App, $Status) {
     if ($Status.Status -eq 'OK' -or $Status.Status -eq 'UNPINNED') { return }
-    $path = Join-Path $settings.InstallerRoot $App.Installer
+    if (-not $script:InstallerRootPath) {
+        $wanted = $(if ($InstallerRoot) { $InstallerRoot } else { $settings.InstallerRoot })
+        $script:InstallerRootPath = Resolve-InstallerRoot $wanted
+        if (-not $script:InstallerRootPath) { throw "Installer folder '$wanted' not found on any drive. Plug in the install USB." }
+        Write-Host "Using installers in $($script:InstallerRootPath)"
+    }
+    $path = Join-Path $script:InstallerRootPath $App.Installer
     if (-not (Test-Path $path)) { throw "Installer not found: $path" }
     if ($App.Sha256) {
         $hash = (Get-FileHash $path -Algorithm SHA256).Hash
