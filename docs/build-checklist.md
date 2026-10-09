@@ -42,7 +42,7 @@ Full details in [windows/README.md](../windows/README.md). With Ventoy:
 
 Everything for the build lives on the 128 GB install USB: the Windows ISO, the answer file, `bootstrap.bat` and the vendor installers. Together they come to roughly 25 GB.
 
-- [ ] Create `cbr-deploy\installers\` at the root of the USB and download each vendor installer into its own folder, keeping the original file name, as listed in [installers/README.md](../installers/README.md):
+- [ ] Create `cbr-deploy\installers\` at the root of the USB and download the vendor installers straight into it, keeping their original names (see [installers/README.md](../installers/README.md)):
   - NVIDIA Studio driver for the RTX 5090
   - TouchDesigner
   - DaVinci Resolve

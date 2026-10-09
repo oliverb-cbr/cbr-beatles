@@ -270,28 +270,44 @@ function Install-WingetApp($App, $Status) {
     }
 }
 
-# Installer in the manifest is a folder: use the one .exe or .msi directly inside it, whatever it's
-# called. Older versions can sit in a subfolder (e.g. old\) without getting in the way.
-function Resolve-VendorInstaller([string]$Path) {
-    if (-not (Test-Path $Path)) { throw "Installer folder not found: $Path" }
-    if (-not (Test-Path $Path -PathType Container)) { return $Path }
-    $found = @(Get-ChildItem $Path -File | Where-Object { $_.Extension -eq '.exe' -or $_.Extension -eq '.msi' })
-    if ($found.Count -eq 0) { throw "No .exe or .msi in $Path" }
+# All vendor installers sit loose in one folder under their download names. Each app's Installer
+# field is a name pattern (e.g. 'TouchDesigner*'); this returns the one .exe/.msi it matches.
+# If several match (old and new versions), the one containing the manifest Version wins.
+function Get-InstallerFiles {
+    @(Get-ChildItem $script:InstallerRootPath -File | Where-Object { $_.Extension -eq '.exe' -or $_.Extension -eq '.msi' })
+}
+
+function Resolve-VendorInstaller($App) {
+    $found = @(Get-InstallerFiles | Where-Object { $_.Name -like $App.Installer })
+    if ($found.Count -gt 1 -and $App.Version) {
+        $found = @($found | Where-Object { $_.Name -like "*$($App.Version)*" })
+    }
+    if ($found.Count -eq 0) {
+        $hint = $(if ($App.Version) { " for version $($App.Version)" } else { '' })
+        throw "No installer matching '$($App.Installer)'$hint in $($script:InstallerRootPath). Download it into that folder."
+    }
     if ($found.Count -gt 1) {
-        throw "More than one installer in ${Path}: $(($found | ForEach-Object Name) -join ', '). Move the ones you don't want into an old\ subfolder."
+        throw "Several installers match '$($App.Installer)': $(($found | ForEach-Object Name) -join ', '). Delete the old ones, or move them into a subfolder."
     }
     $found[0].FullName
 }
 
+# Files in the installer folder that no app in the manifest claims: usually a pattern that needs fixing.
+function Show-UnclaimedInstallers {
+    if (-not $script:InstallerRootPath) { return }
+    $patterns = @($manifest.Apps | Where-Object { $_.Method -eq 'installer' } | ForEach-Object Installer)
+    $unclaimed = @(Get-InstallerFiles | Where-Object { $name = $_.Name; -not ($patterns | Where-Object { $name -like $_ }) })
+    if ($unclaimed.Count) {
+        Write-Step "Installers on the USB that no app in the manifest uses"
+        $unclaimed | ForEach-Object { Write-Host " - $($_.Name)" -ForegroundColor Yellow }
+        Write-Host "Either an app's Installer pattern in manifest.psd1 needs changing, or the file isn't needed."
+    }
+}
+
 function Install-VendorApp($App, $Status) {
     if ($Status.Status -eq 'OK' -or $Status.Status -eq 'UNPINNED') { return }
-    if (-not $script:InstallerRootPath) {
-        $wanted = $(if ($InstallerRoot) { $InstallerRoot } else { $settings.InstallerRoot })
-        $script:InstallerRootPath = Resolve-InstallerRoot $wanted
-        if (-not $script:InstallerRootPath) { throw "Installer folder '$wanted' not found on any drive. Plug in the install USB." }
-        Write-Host "Using installers in $($script:InstallerRootPath)"
-    }
-    $path = Resolve-VendorInstaller (Join-Path $script:InstallerRootPath $App.Installer)
+    if (-not $script:InstallerRootPath) { throw "Installer folder '$script:InstallerRootWanted' not found on any drive. Plug in the install USB." }
+    $path = Resolve-VendorInstaller $App
     Write-Host "Installer: $path"
     if ($App.Sha256) {
         $hash = (Get-FileHash $path -Algorithm SHA256).Hash
@@ -328,6 +344,11 @@ function Install-UnityEditor($App, $Status) {
 }
 
 function Invoke-Apps {
+    $script:InstallerRootWanted = $(if ($InstallerRoot) { $InstallerRoot } else { $settings.InstallerRoot })
+    $script:InstallerRootPath = Resolve-InstallerRoot $script:InstallerRootWanted
+    if ($script:InstallerRootPath) { Write-Host "Vendor installers: $($script:InstallerRootPath)" }
+    else { Write-Warning "Installer folder '$($script:InstallerRootWanted)' not found on any drive; vendor installs will be skipped." }
+
     $manual = @()
     foreach ($app in $manifest.Apps) {
         $status = Get-AppStatus $app
@@ -350,6 +371,7 @@ function Invoke-Apps {
         Write-Step "Manual steps still needed"
         foreach ($m in $manual) { Write-Host " - $($m.Name): $($m.Notes)" -ForegroundColor Yellow }
     }
+    Show-UnclaimedInstallers
 }
 
 try {
