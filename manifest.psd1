@@ -77,6 +77,7 @@
             'Microsoft.WindowsFeedbackHub'
             'Microsoft.YourPhone'
             'MicrosoftCorporationII.MicrosoftFamily'
+            'MicrosoftWindows.Client.WebExperience'   # Widgets
             'MSTeams'
         )
     }

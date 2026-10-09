@@ -81,7 +81,10 @@ function Set-PrivacyPolicies {
     Set-RegistryValue "$policies\WindowsAI" 'DisableAIDataAnalysis' 1          # Recall snapshots
     Set-RegistryValue "$policies\WindowsCopilot" 'TurnOffWindowsCopilot' 1
     Set-RegistryValue "$policies\CloudContent" 'DisableWindowsConsumerFeatures' 1   # Enterprise/Education only; harmless on Pro
-    Set-RegistryValue 'HKLM:\SOFTWARE\Policies\Microsoft\Dsh' 'AllowNewsAndInterests' 0   # Widgets
+    # Widgets. Recent Windows 11 builds refuse this write even from an admin script; the Widgets app
+    # (MicrosoftWindows.Client.WebExperience) is removed via RemoveAppx anyway, so this is a bonus.
+    try { Set-RegistryValue 'HKLM:\SOFTWARE\Policies\Microsoft\Dsh' 'AllowNewsAndInterests' 0 }
+    catch { Write-Host 'Windows blocked the Widgets policy; relying on removing the Widgets app instead.' }
     # Also set by the answer file; repeated here for machines installed without it.
     Set-RegistryValue 'HKLM:\SYSTEM\CurrentControlSet\Control\BitLocker' 'PreventDeviceEncryption' 1
 }
@@ -152,86 +155,109 @@ function Set-RegionalSettings {
     Write-Host "$($settings.TimeZone), $($settings.Locale) formats and keyboard."
 }
 
+# Runs one Windows setting step. A failure is reported and recorded, and the next step still runs.
+function Invoke-Step([string]$Title, [scriptblock]$Body) {
+    Write-Step $Title
+    try { & $Body }
+    catch {
+        Write-Warning $_.Exception.Message
+        $failures.Add("${Title}: $($_.Exception.Message)")
+    }
+}
+
 function Invoke-SystemConfig {
-    Write-Step "Hostname"
-    if ($env:COMPUTERNAME -ne $machineEntry.ComputerName) {
-        Rename-Computer -NewName $machineEntry.ComputerName -Force
-        $script:RebootNeeded = $true
-        Write-Host "Renamed to $($machineEntry.ComputerName) (takes effect after reboot)."
-    } else { Write-Host "Already $($machineEntry.ComputerName)." }
-
-    Write-Step "Repo folder permissions (staff can read the scripts, only admins can change them)"
-    $root = Split-Path $settings.RepoPath -Parent
-    & icacls $root /inheritance:r /grant:r 'Administrators:(OI)(CI)F' 'SYSTEM:(OI)(CI)F' 'Users:(OI)(CI)RX' /T /Q | Out-Null
-    if ($LASTEXITCODE -ne 0) { $failures.Add('icacls on repo folder') }
-
-    Write-Step "Shared staff account '$($settings.SharedUser)'"
-    if (-not (Get-LocalUser -Name $settings.SharedUser -ErrorAction SilentlyContinue)) {
-        $pw = Read-Host "Password for the new '$($settings.SharedUser)' account" -AsSecureString
-        New-LocalUser -Name $settings.SharedUser -Password $pw -PasswordNeverExpires -FullName 'CBR Staff' | Out-Null
-        Add-LocalGroupMember -Group 'Users' -Member $settings.SharedUser
-        Write-Host "Created as a standard user."
-    } else {
-        $isAdmin = Get-LocalGroupMember -Group 'Administrators' -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -like "*\$($settings.SharedUser)" }
-        if ($isAdmin) { Write-Warning "$($settings.SharedUser) is an administrator. It should be a standard user." }
-        else { Write-Host "Exists, standard user." }
+    Invoke-Step "Hostname" {
+        if ($env:COMPUTERNAME -ne $machineEntry.ComputerName) {
+            Rename-Computer -NewName $machineEntry.ComputerName -Force
+            $script:RebootNeeded = $true
+            Write-Host "Renamed to $($machineEntry.ComputerName) (takes effect after reboot)."
+        } else { Write-Host "Already $($machineEntry.ComputerName)." }
     }
 
-    Write-Step "Region: UK time zone, formats and keyboard"
-    try { Set-RegionalSettings } catch { $failures.Add("Regional settings: $($_.Exception.Message)") }
-
-    Write-Step "Power: no sleep on AC, no hibernation or Fast Startup, High performance plan"
-    & powercfg /hibernate off
-    & powercfg /change standby-timeout-ac 0
-    & powercfg /change hibernate-timeout-ac 0
-    & powercfg /setactive SCHEME_MIN
-
-    Write-Step "Long path support"
-    Set-RegistryValue 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' 'LongPathsEnabled' 1
-
-    Write-Step "Stop Windows Update replacing drivers (the NVIDIA driver is pinned in the manifest)"
-    Set-RegistryValue 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' 'ExcludeWUDriversInQualityUpdate' 1
-
-    Write-Step "Remove OneDrive"
-    Set-RegistryValue 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive' 'DisableFileSyncNGSC' 1
-    $oneDrive = Get-InstalledPrograms | Where-Object { $_.DisplayName -like 'Microsoft OneDrive*' }
-    if ($oneDrive) {
-        & winget uninstall --id Microsoft.OneDrive --exact --silent --accept-source-agreements --disable-interactivity
-        Reset-InstalledProgramsCache
-    } else { Write-Host "Not installed." }
-
-    Write-Step "Remove preinstalled Store apps (Settings.RemoveAppx in the manifest)"
-    Remove-Bloat
-
-    Write-Step "Privacy and advert settings (machine-wide policies)"
-    Set-PrivacyPolicies
-
-    Write-Step "Per-user settings: new accounts, '$($settings.SharedUser)' and this account"
-    Set-AllUserSettings
-
-    Write-Step "WSL platform (distros are installed per user by user-setup.ps1)"
-    $vmp = Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform
-    if ($vmp.State -ne 'Enabled') {
-        & wsl.exe --install --no-distribution
-        $script:RebootNeeded = $true
-    } else {
-        & wsl.exe --update
+    Invoke-Step "Repo folder permissions (staff can read the scripts, only admins can change them)" {
+        $root = Split-Path $settings.RepoPath -Parent
+        & icacls $root /inheritance:r /grant:r 'Administrators:(OI)(CI)F' 'SYSTEM:(OI)(CI)F' 'Users:(OI)(CI)RX' /T /Q | Out-Null
+        if ($LASTEXITCODE -ne 0) { $failures.Add('icacls on repo folder') }
     }
 
-    Write-Step "OpenSSH server (lets fleet.ps1 audit and update this machine remotely)"
-    $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server*'
-    if ($cap.State -ne 'Installed') { Add-WindowsCapability -Online -Name $cap.Name | Out-Null }
-    Set-Service sshd -StartupType Automatic
-    Start-Service sshd
-    Set-RegistryValue 'HKLM:\SOFTWARE\OpenSSH' 'DefaultShell' 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' 'String'
-    $keys = Join-Path (Get-CbrRepoRoot) 'config\ssh\administrators_authorized_keys'
-    if (Test-Path $keys) {
-        $dest = 'C:\ProgramData\ssh\administrators_authorized_keys'
-        Copy-Item $keys $dest -Force
-        & icacls $dest /inheritance:r /grant 'Administrators:F' /grant 'SYSTEM:F' | Out-Null
-        Write-Host "Admin SSH keys installed."
-    } else { Write-Host "No config\ssh\administrators_authorized_keys in the repo yet; skipping keys." }
+    Invoke-Step "Shared staff account '$($settings.SharedUser)'" {
+        if (-not (Get-LocalUser -Name $settings.SharedUser -ErrorAction SilentlyContinue)) {
+            $pw = Read-Host "Password for the new '$($settings.SharedUser)' account" -AsSecureString
+            New-LocalUser -Name $settings.SharedUser -Password $pw -PasswordNeverExpires -FullName 'CBR Staff' | Out-Null
+            Add-LocalGroupMember -Group 'Users' -Member $settings.SharedUser
+            Write-Host "Created as a standard user."
+        } else {
+            $isAdmin = Get-LocalGroupMember -Group 'Administrators' -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -like "*\$($settings.SharedUser)" }
+            if ($isAdmin) { Write-Warning "$($settings.SharedUser) is an administrator. It should be a standard user." }
+            else { Write-Host "Exists, standard user." }
+        }
+    }
+
+    Invoke-Step "Region: UK time zone, formats and keyboard" {
+        try { Set-RegionalSettings } catch { $failures.Add("Regional settings: $($_.Exception.Message)") }
+    }
+
+    Invoke-Step "Power: no sleep on AC, no hibernation or Fast Startup, High performance plan" {
+        & powercfg /hibernate off
+        & powercfg /change standby-timeout-ac 0
+        & powercfg /change hibernate-timeout-ac 0
+        & powercfg /setactive SCHEME_MIN
+    }
+
+    Invoke-Step "Long path support" {
+        Set-RegistryValue 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' 'LongPathsEnabled' 1
+    }
+
+    Invoke-Step "Stop Windows Update replacing drivers (the NVIDIA driver is pinned in the manifest)" {
+        Set-RegistryValue 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' 'ExcludeWUDriversInQualityUpdate' 1
+    }
+
+    Invoke-Step "Remove OneDrive" {
+        Set-RegistryValue 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive' 'DisableFileSyncNGSC' 1
+        $oneDrive = Get-InstalledPrograms | Where-Object { $_.DisplayName -like 'Microsoft OneDrive*' }
+        if ($oneDrive) {
+            & winget uninstall --id Microsoft.OneDrive --exact --silent --accept-source-agreements --disable-interactivity
+            Reset-InstalledProgramsCache
+        } else { Write-Host "Not installed." }
+    }
+
+    Invoke-Step "Remove preinstalled Store apps (Settings.RemoveAppx in the manifest)" {
+        Remove-Bloat
+    }
+
+    Invoke-Step "Privacy and advert settings (machine-wide policies)" {
+        Set-PrivacyPolicies
+    }
+
+    Invoke-Step "Per-user settings: new accounts, '$($settings.SharedUser)' and this account" {
+        Set-AllUserSettings
+    }
+
+    Invoke-Step "WSL platform (distros are installed per user by user-setup.ps1)" {
+        $vmp = Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform
+        if ($vmp.State -ne 'Enabled') {
+            & wsl.exe --install --no-distribution
+            $script:RebootNeeded = $true
+        } else {
+            & wsl.exe --update
+        }
+    }
+
+    Invoke-Step "OpenSSH server (lets fleet.ps1 audit and update this machine remotely)" {
+        $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server*'
+        if ($cap.State -ne 'Installed') { Add-WindowsCapability -Online -Name $cap.Name | Out-Null }
+        Set-Service sshd -StartupType Automatic
+        Start-Service sshd
+        Set-RegistryValue 'HKLM:\SOFTWARE\OpenSSH' 'DefaultShell' 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' 'String'
+        $keys = Join-Path (Get-CbrRepoRoot) 'config\ssh\administrators_authorized_keys'
+        if (Test-Path $keys) {
+            $dest = 'C:\ProgramData\ssh\administrators_authorized_keys'
+            Copy-Item $keys $dest -Force
+            & icacls $dest /inheritance:r /grant 'Administrators:F' /grant 'SYSTEM:F' | Out-Null
+            Write-Host "Admin SSH keys installed."
+        } else { Write-Host "No config\ssh\administrators_authorized_keys in the repo yet; skipping keys." }
+    }
 }
 
 # ---------------------------------------------------------------------------------------------
