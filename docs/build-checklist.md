@@ -47,9 +47,8 @@ Everything for the build lives on the 128 GB install USB: the Windows ISO, the a
   - TouchDesigner
   - DaVinci Resolve
   - Insta360 Studio and Insta360 Stitcher
-  - LCC Studio
+  - LCC Studio (an .iso is fine), LCC Editor and LCC Model Editor
   - Meta Quest Developer Hub
-  - VIVE Mars
 - [ ] Nothing to configure: provisioning looks for a `cbr-deploy\installers` folder on every drive, so it finds the USB whatever letter it gets. Just keep the USB plugged in while provisioning.
 
 ### Accounts and keys
@@ -156,7 +155,7 @@ Restore-VMCheckpoint -VMName CBR-Test -Name 'clean base' -Confirm:$false
 
 ### Provision
 
-- [ ] Run `bootstrap.bat JOHN` from the USB stick. Click through the installers that open on their own (Insta360, LCC, VIVE Mars, MQDH).
+- [ ] Run `bootstrap.bat JOHN` from the USB stick. Click through the installers that open on their own (Insta360, the three LCC tools, MQDH).
 - [ ] Reboot when asked, then run `provision.ps1` again (command in phase 2).
 
 ### Manual installs
@@ -173,7 +172,7 @@ Restore-VMCheckpoint -VMName CBR-Test -Name 'clean base' -Confirm:$false
 ### Test with real work
 
 - [ ] Blender GPU render, TouchDesigner project, Resolve export, Unreal 5.6 project (including a C++ build), Unity build.
-- [ ] Insta360 stitch, LCC, VIVE Mars, Quest through MQDH and SideQuest.
+- [ ] Insta360 stitch, LCC Studio and the LCC editors, VIVE Mars tracking, Quest through MQDH and SideQuest.
 - [ ] A PyTorch container using the GPU in WSL.
 
 ### Lock in versions

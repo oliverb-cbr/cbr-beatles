@@ -5,14 +5,17 @@ The installers don't go in Git. Put them straight into a `cbr-deploy\installers`
 ```text
 <USB>:\cbr-deploy\installers\
 ├── 617.42-desktop-win10-win11-64bit-international-nsd-dch-whql.exe
-├── TouchDesigner.2025.xxxxx.exe
-├── DaVinci_Resolve_xx.x_Windows.exe        (unzip Resolve's download, keep the .exe)
-├── Insta360 Studio ... .exe
-├── Insta360 Stitcher ... .exe
-├── LCC Studio ... .exe
-├── Meta Quest Developer Hub ... .exe
-└── VIVE Mars ... .exe
+├── DaVinci_Resolve_21.1.1_Windows.exe
+├── Insta360Stitcher_Winx64_4.0.1_build_202506122124.exe
+├── Insta360_Studio_6.0.6_release_....exe
+├── LCC Model Editor_v1.3.1.exe
+├── LCCEditorSetup_v2.5.0.018-online-en.exe
+├── LCCStudio_2.5.0.025_full_en.iso          (mounted automatically)
+├── Meta-Quest-Developer-Hub.exe
+└── TouchDesigner.2025.33230.exe
 ```
+
+.zip and .iso files are fine as downloaded: provisioning unpacks or mounts them and runs the installer inside.
 
 Provisioning searches every drive for `cbr-deploy\installers`, so the USB's drive letter doesn't matter.
 

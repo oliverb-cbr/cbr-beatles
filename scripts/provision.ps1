@@ -271,10 +271,41 @@ function Install-WingetApp($App, $Status) {
 }
 
 # All vendor installers sit loose in one folder under their download names. Each app's Installer
-# field is a name pattern (e.g. 'TouchDesigner*'); this returns the one .exe/.msi it matches.
+# field is a name pattern (e.g. 'TouchDesigner*'); this returns the one file it matches.
 # If several match (old and new versions), the one containing the manifest Version wins.
 function Get-InstallerFiles {
-    @(Get-ChildItem $script:InstallerRootPath -File | Where-Object { $_.Extension -eq '.exe' -or $_.Extension -eq '.msi' })
+    @(Get-ChildItem $script:InstallerRootPath -File | Where-Object { '.exe', '.msi', '.zip', '.iso' -contains $_.Extension.ToLower() })
+}
+
+# For a .zip or .iso, unpacks or mounts it and returns the installer inside; otherwise returns $Path.
+# Clean-up (unmount, delete the unpacked copy) waits until the end of provisioning, because some
+# installers hand over to a second process and exit while it's still reading the files.
+function Open-InstallerPackage([string]$Path, $App) {
+    $ext = [IO.Path]::GetExtension($Path).ToLower()
+    if ($ext -eq '.zip') {
+        $dest = Join-Path $env:TEMP ('cbr-' + [IO.Path]::GetFileNameWithoutExtension($Path))
+        if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+        Write-Host "Unpacking $(Split-Path -Leaf $Path)..."
+        Expand-Archive -Path $Path -DestinationPath $dest
+        $script:Cleanup.Add({ Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue }.GetNewClosure())
+        $root = $dest
+    } elseif ($ext -eq '.iso') {
+        Write-Host "Mounting $(Split-Path -Leaf $Path)..."
+        $image = Mount-DiskImage -ImagePath $Path -PassThru
+        $script:Cleanup.Add({ Dismount-DiskImage -ImagePath $Path -ErrorAction SilentlyContinue | Out-Null }.GetNewClosure())
+        $root = ($image | Get-Volume).DriveLetter + ':\'
+    } else {
+        return $Path
+    }
+    # Prefer installers at the top of the package; look deeper only if there are none.
+    $candidates = @(Get-ChildItem $root -File | Where-Object { '.exe', '.msi' -contains $_.Extension.ToLower() })
+    if (-not $candidates.Count) {
+        $candidates = @(Get-ChildItem $root -File -Recurse | Where-Object { '.exe', '.msi' -contains $_.Extension.ToLower() })
+    }
+    if ($App.Inner) { $candidates = @($candidates | Where-Object { $_.Name -like $App.Inner }) }
+    if ($candidates.Count -eq 1) { return $candidates[0].FullName }
+    if (-not $candidates.Count) { throw "No installer found inside $(Split-Path -Leaf $Path)" }
+    throw "Several installers inside $(Split-Path -Leaf $Path): $(($candidates | ForEach-Object Name) -join ', '). Set Inner on this app in the manifest to pick one."
 }
 
 function Resolve-VendorInstaller($App) {
@@ -307,12 +338,13 @@ function Show-UnclaimedInstallers {
 function Install-VendorApp($App, $Status) {
     if ($Status.Status -eq 'OK' -or $Status.Status -eq 'UNPINNED') { return }
     if (-not $script:InstallerRootPath) { throw "Installer folder '$script:InstallerRootWanted' not found on any drive. Plug in the install USB." }
-    $path = Resolve-VendorInstaller $App
-    Write-Host "Installer: $path"
+    $package = Resolve-VendorInstaller $App
+    Write-Host "Installer: $package"
     if ($App.Sha256) {
-        $hash = (Get-FileHash $path -Algorithm SHA256).Hash
-        if ($hash -ne $App.Sha256) { throw "SHA-256 mismatch for $path" }
+        $hash = (Get-FileHash $package -Algorithm SHA256).Hash
+        if ($hash -ne $App.Sha256) { throw "SHA-256 mismatch for $package" }
     }
+    $path = Open-InstallerPackage $package $App
     if ($path -like '*.msi') {
         $exe = 'msiexec.exe'
         $argList = "/i `"$path`" /qn /norestart $($App.Args)"
@@ -344,6 +376,11 @@ function Install-UnityEditor($App, $Status) {
 }
 
 function Invoke-Apps {
+    $script:Cleanup = New-Object System.Collections.Generic.List[scriptblock]
+    try { Invoke-AppList } finally { foreach ($c in $script:Cleanup) { & $c } }
+}
+
+function Invoke-AppList {
     $script:InstallerRootWanted = $(if ($InstallerRoot) { $InstallerRoot } else { $settings.InstallerRoot })
     $script:InstallerRootPath = Resolve-InstallerRoot $script:InstallerRootWanted
     if ($script:InstallerRootPath) { Write-Host "Vendor installers: $($script:InstallerRootPath)" }

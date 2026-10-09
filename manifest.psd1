@@ -28,7 +28,9 @@
 #   Installer Wildcard matched against the file names in Settings.InstallerRoot, where all the
 #             installers sit loose under their download names. If an old and a new version both
 #             match, the one whose name contains Version is used. Provisioning lists any file
-#             no pattern matches, so a wrong pattern shows up.
+#             no pattern matches, so a wrong pattern shows up. .zip and .iso files are opened
+#             and the installer inside is run.
+#   Inner     Optional, for .zip/.iso: pattern for the installer inside, if there's more than one.
 #   Args      Silent-install arguments. $null = run the installer interactively and wait.
 #   Sha256    Optional; checked before running when set.
 
@@ -135,11 +137,15 @@
         # Version is the driver number. '-nsd-' in the file name marks a Studio driver (Game Ready ones lack it).
         # Test a new one on JOHN, then change Version here.
         @{ Name = 'NVIDIA driver';   Method = 'installer'; Installer = '*-nsd-*'; Args = '-s -noreboot -noeula'; Policy = 'pinned'; Version = '617.42'; Detect = 'nvidia-driver' }
-        @{ Name = 'Insta360 Studio';   Method = 'installer'; Installer = '*Insta360*Studio*';   Args = $null; Policy = 'pinned'; Version = $null; Detect = 'Insta360 Studio*' }
-        @{ Name = 'Insta360 Stitcher'; Method = 'installer'; Installer = '*Stitcher*'; Args = $null; Policy = 'pinned'; Version = $null; Detect = 'Insta360*Stitcher*' }
-        @{ Name = 'LCC Studio';      Method = 'installer'; Installer = '*LCC*';          Args = $null; Policy = 'pinned'; Version = $null; Detect = 'LCC*' }
-        @{ Name = 'Meta Quest Developer Hub'; Method = 'installer'; Installer = '*Quest*Developer*Hub*';     Args = $null; Policy = 'current'; Detect = 'Meta Quest Developer Hub*' }
-        @{ Name = 'VIVE Mars';       Method = 'installer'; Installer = '*Mars*';          Args = $null; Policy = 'pinned'; Version = $null; Detect = '*Mars*' }
+        @{ Name = 'Insta360 Studio';   Method = 'installer'; Installer = 'Insta360_Studio*';    Args = $null; Policy = 'pinned'; Version = $null; Detect = 'Insta360 Studio*' }
+        @{ Name = 'Insta360 Stitcher'; Method = 'installer'; Installer = 'Insta360Stitcher*';   Args = $null; Policy = 'pinned'; Version = $null; Detect = 'Insta360*Stitcher*' }
+        # XGRIDS LCC tools. LCC Studio ships as an ISO; provisioning mounts it and runs the installer inside.
+        @{ Name = 'LCC Studio';        Method = 'installer'; Installer = 'LCCStudio*';          Args = $null; Policy = 'pinned'; Version = $null; Detect = 'LCC Studio*' }
+        @{ Name = 'LCC Editor';        Method = 'installer'; Installer = 'LCCEditorSetup*';     Args = $null; Policy = 'pinned'; Version = $null; Detect = 'LCC Editor*' }
+        @{ Name = 'LCC Model Editor';  Method = 'installer'; Installer = 'LCC Model Editor*';   Args = $null; Policy = 'pinned'; Version = $null; Detect = 'LCC Model Editor*' }
+        # Downloads as a .zip; provisioning unpacks it and runs the installer inside.
+        @{ Name = 'Meta Quest Developer Hub'; Method = 'installer'; Installer = 'Meta-Quest-Developer-Hub*'; Args = $null; Policy = 'current'; Detect = 'Meta Quest Developer Hub*' }
+        # VIVE Mars needs no PC software.
         # Kinect v2 SDK left out on purpose (no hardware). Add it here if that changes.
     )
 }
