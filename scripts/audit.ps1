@@ -44,6 +44,8 @@ $checks = @(
     New-Check 'Preinstalled apps removed' $bloat ($bloat -eq 'none')
     New-Check 'System drive not encrypted' $encryption ($encryption -eq 'FullyDecrypted')
     New-Check 'OneDrive removed' $(if ($oneDrive) { 'installed' } else { 'absent' }) (-not $oneDrive)
+    $staff = Test-Path (Get-StaffSetupMarker)
+    New-Check "WSL + Docker set up for $($manifest.Settings.SharedUser)" $(if ($staff) { 'yes' } else { "no: sign in as $($manifest.Settings.SharedUser)" }) $staff
     New-Check 'sshd running' (Get-Service sshd -ErrorAction SilentlyContinue).Status ((Get-Service sshd -ErrorAction SilentlyContinue).Status -eq 'Running')
 )
 

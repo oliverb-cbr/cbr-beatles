@@ -119,4 +119,43 @@ function Get-AppStatus($App) {
     }
 }
 
+# Written by user-setup.ps1 once the staff account's WSL and Docker are set up. Staff can create
+# files in C:\ProgramData, and everyone can read it, so the admin side and the audit can see it.
+function Get-StaffSetupMarker { 'C:\ProgramData\CBR\staff-setup-done.txt' }
+
+# A task that runs a script from this repo each time $User signs in, in a window on their desktop.
+# No password is stored: it only runs while they're signed in. -Elevated runs it as admin without
+# a prompt (for the admin account); -Hidden starts it without a window.
+function Register-CbrSignInTask([string]$Name, [string]$User, [string]$Script, [string]$Arguments,
+                                [switch]$Elevated, [switch]$Hidden) {
+    $style = $(if ($Hidden) { '-WindowStyle Hidden ' } else { '' })
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
+        -Argument "-NoProfile -ExecutionPolicy Bypass $style-File `"$Script`" $Arguments"
+    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $User
+    $trigger.Delay = 'PT20S'   # let the desktop and network settle first
+    $level = $(if ($Elevated) { 'Highest' } else { 'Limited' })
+    $principal = New-ScheduledTaskPrincipal -UserId $User -LogonType Interactive -RunLevel $level
+    $options = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+        -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
+    Register-ScheduledTask -TaskName $Name -Action $action -Trigger $trigger -Principal $principal `
+        -Settings $options -Force | Out-Null
+}
+
+function Unregister-CbrTask([string]$Name) {
+    if (Get-ScheduledTask -TaskName $Name -ErrorAction SilentlyContinue) {
+        Unregister-ScheduledTask -TaskName $Name -Confirm:$false
+    }
+}
+
+# Waits up to $Minutes for github.com to answer. A fresh sign-in can take a moment to get online.
+function Wait-Internet([int]$Minutes = 2) {
+    $deadline = (Get-Date).AddMinutes($Minutes)
+    do {
+        & curl.exe --silent --head --max-time 10 --output NUL https://github.com
+        if ($LASTEXITCODE -eq 0) { return $true }
+        Start-Sleep -Seconds 5
+    } while ((Get-Date) -lt $deadline)
+    $false
+}
+
 Export-ModuleMember -Function *

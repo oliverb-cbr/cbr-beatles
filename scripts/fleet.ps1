@@ -36,7 +36,9 @@ if ($Action -eq 'Update') {
     foreach ($t in $targets) {
         Write-Step "Updating $($t.Name)"
         Invoke-Remote $t 'update.ps1'
-        if ($LASTEXITCODE -ne 0) {
+        if ($LASTEXITCODE -eq 3010) {
+            Write-Warning "$($t.Name) needs a restart to finish updating: ssh $($settings.AdminUser)@$($t.Address) shutdown /r /t 0"
+        } elseif ($LASTEXITCODE -ne 0) {
             Write-Warning "$($t.Name) update exited with $LASTEXITCODE. winget can fail over SSH; if so, run update.ps1 at the machine."
         }
     }

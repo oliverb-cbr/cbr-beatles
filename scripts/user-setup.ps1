@@ -7,15 +7,45 @@
     (not the admin), after provision.ps1 has enabled the WSL platform and the machine has rebooted.
     Doesn't need Windows admin rights. Safe to run again.
 
+    provision.ps1 leaves a task that runs this by itself each time the staff account signs in
+    (-AtSignIn), until it has worked once. It then writes a marker and the task stops.
+
     Docker Engine runs inside Ubuntu, not Docker Desktop, so there's no Docker Desktop licence.
 #>
 [CmdletBinding()]
-param()
+param(
+    # Used by the sign-in task: does nothing if this has already worked, otherwise opens a window
+    # and runs the setup there (-FromSignIn).
+    [switch]$AtSignIn,
+    [switch]$FromSignIn
+)
 
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'lib\Common.psm1') -Force
 $settings = (Get-CbrManifest).Settings
 $distro = $settings.WslDistro
+$marker = Get-StaffSetupMarker
+
+if ($AtSignIn) {
+    if (Test-Path $marker) { return }
+    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -FromSignIn"
+    return
+}
+
+if ($FromSignIn) {
+    $host.UI.RawUI.WindowTitle = 'CBR staff setup'
+    Write-Host "Setting up Ubuntu, Docker and GPU support for the '$($settings.SharedUser)' account." -ForegroundColor Cyan
+    Write-Host 'This happens once and takes about 10-20 minutes. Leave this window open.'
+    try {
+        & $PSCommandPath
+        Write-Host "`nAll done. This won't run again." -ForegroundColor Green
+    } catch {
+        Write-Host "`nStaff setup didn't finish: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host 'It tries again the next time this account signs in. If it keeps failing, send the message above to whoever looks after these PCs.'
+    }
+    Read-Host "`nPress Enter to close this window" | Out-Null
+    return
+}
 
 if (Test-IsAdmin) {
     Write-Warning "You're running as an administrator. The distro will belong to this account, not '$($settings.SharedUser)'."
@@ -46,4 +76,6 @@ if ($LASTEXITCODE -eq 2) {
 if ($LASTEXITCODE -ne 0) { throw "setup-docker.sh failed ($LASTEXITCODE)" }
 
 & wsl.exe --shutdown
+New-Item -ItemType Directory -Force -Path (Split-Path $marker) | Out-Null
+Set-Content -Path $marker -Value "Staff setup finished $(Get-Date -Format s) by $env:USERNAME."
 Write-Host "`nDone. Open Ubuntu from the Start menu to use Docker and uv. On a workstation the GPU check above should have listed the RTX 5090." -ForegroundColor Green

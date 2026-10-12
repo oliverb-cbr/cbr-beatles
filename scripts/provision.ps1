@@ -156,6 +156,27 @@ function Set-RegionalSettings {
 }
 
 # Runs one Windows setting step. A failure is reported and recorded, and the next step still runs.
+# Asks twice, so a typo doesn't lock staff out of the shared account.
+function Read-NewPassword([string]$For) {
+    while ($true) {
+        $first = Read-Host "Password for $For" -AsSecureString
+        $second = Read-Host 'Type it again' -AsSecureString
+        $a = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($first)
+        $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($second)
+        try {
+            $plainA = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($a)
+            $same = $plainA -ceq [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b)
+            $empty = -not $plainA
+        } finally {
+            [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($a)
+            [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b)
+        }
+        if ($empty) { Write-Host "It can't be blank." -ForegroundColor Yellow }
+        elseif (-not $same) { Write-Host "Those didn't match. Try again." -ForegroundColor Yellow }
+        else { return $first }
+    }
+}
+
 function Invoke-Step([string]$Title, [scriptblock]$Body) {
     Write-Step $Title
     try { & $Body }
@@ -189,7 +210,7 @@ function Invoke-SystemConfig {
 
     Invoke-Step "Shared staff account '$($settings.SharedUser)'" {
         if (-not (Get-LocalUser -Name $settings.SharedUser -ErrorAction SilentlyContinue)) {
-            $pw = Read-Host "Password for the new '$($settings.SharedUser)' account" -AsSecureString
+            $pw = Read-NewPassword "the new '$($settings.SharedUser)' account"
             New-LocalUser -Name $settings.SharedUser -Password $pw -PasswordNeverExpires -FullName 'CBR Staff' | Out-Null
             Add-LocalGroupMember -Group 'Users' -Member $settings.SharedUser
             Write-Host "Created as a standard user."
@@ -198,6 +219,18 @@ function Invoke-SystemConfig {
                 Where-Object { $_.Name -like "*\$($settings.SharedUser)" }
             if ($isAdmin) { Write-Warning "$($settings.SharedUser) is an administrator. It should be a standard user." }
             else { Write-Host "Exists, standard user." }
+        }
+    }
+
+    Invoke-Step "WSL and Docker for '$($settings.SharedUser)', at their next sign-in" {
+        $task = 'CBR - staff setup at sign-in'
+        if (Test-Path (Get-StaffSetupMarker)) {
+            Unregister-CbrTask $task
+            Write-Host 'Already done.'
+        } else {
+            Register-CbrSignInTask -Name $task -User $settings.SharedUser -Hidden `
+                -Script (Join-Path $PSScriptRoot 'user-setup.ps1') -Arguments '-AtSignIn'
+            Write-Host "It starts by itself the next time $($settings.SharedUser) signs in."
         }
     }
 
@@ -571,3 +604,6 @@ try {
 } finally {
     Stop-Transcript | Out-Null
 }
+# 3010 is Windows' "worked, but restart to finish". start.ps1 uses it to restart and carry on.
+if ($script:RebootNeeded) { exit 3010 }
+exit 0

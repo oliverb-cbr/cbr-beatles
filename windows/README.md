@@ -13,20 +13,26 @@ Debloat and privacy settings aren't in here. `scripts/provision.ps1` applies the
 
 **Use the "English International" Windows 11 ISO** from Microsoft's download page. The answer file asks for UK English, and Setup stops with an error if the ISO doesn't contain that language.
 
-## On a USB stick with Ventoy
+## On the install USB stick
 
-1. Put the ISO in an `ISO\Windows11` folder on the Ventoy drive.
-2. Copy `autounattend.xml` to `ventoy\script\cbr-autounattend.xml` on the Ventoy drive.
-3. Copy `ventoy.json` to `ventoy\ventoy.json` (merge it in if you already have one).
-   While you're there, put `bootstrap.bat` and the `cbr-deploy\installers` folder (see [installers/README.md](../installers/README.md)) on the stick too, so one USB has everything.
-4. Boot the stick and pick the Windows ISO. Ventoy asks whether to use the CBR template. Choose it.
+Run `bootstrap.bat` on any Windows PC and choose **Make or refresh the install USB stick**. It does all of this for you, and checks the ISO against `Settings.WindowsIso` in the manifest:
 
-## On a USB stick with Rufus
+| On the stick | What it is |
+|---|---|
+| Ventoy | The boot menu. Installed (erasing the stick) only if the stick doesn't have it already. |
+| `ISO\Windows11\<the ISO>` | Windows 11 |
+| `ventoy\script\cbr-autounattend.xml` | This answer file |
+| `ventoy\ventoy.json` | Tells Ventoy to offer the answer file for ISOs in `ISO\Windows11` (merged with any settings already there) |
+| `bootstrap.bat` | To run on each machine once Windows is installed |
+| `cbr-deploy\installers` | Installers that can't be downloaded automatically, copied from `C:\CBR\installers` |
 
-1. Write the ISO with Rufus. When it shows the "Windows User Experience" box, **untick everything**: Rufus otherwise writes its own answer file, which would clash with ours.
-2. Copy `autounattend.xml` to the root of the stick.
+To install: boot the stick, pick the Windows ISO, and choose the CBR template when Ventoy asks.
+
+**Secure Boot:** the first time the stick boots on each PC, Ventoy shows a blue screen asking you to enrol its key. Follow it (Enroll key from disk, then the `.cer` file on the stick), and restart. Once per PC. Some boards also need "Allow Microsoft 3rd Party UEFI CA" turned on in the firmware.
 
 ## In the Hyper-V test VM
+
+Hyper-V VMs can't boot from a USB stick, so the answer file goes on a small second disc instead.
 
 1. On the host, run `windows\make-answer-iso.ps1`. It writes `windows\cbr-answer.iso`.
 2. Attach it as a second DVD drive alongside the Windows ISO:

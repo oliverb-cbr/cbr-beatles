@@ -5,7 +5,7 @@ The installers themselves don't go in Git. The manifest is still the source of t
 ## Where provisioning gets them
 
 1. **`C:\CBR\installers` on the machine.** Downloads land here, and so do installers you fetch by hand. Files keep the names they downloaded with.
-2. **An extra folder, if one is plugged in:** a `cbr-deploy\installers` folder at the root of any drive (a USB stick), or a NAS share set in `Settings.InstallerRoot`. Optional.
+2. **An extra folder, if one is plugged in:** a `cbr-deploy\installers` folder at the root of any drive (the install USB stick; refreshing the stick puts the hand-downloaded installers there), or a NAS share set in `Settings.InstallerRoot`. Optional.
 3. **The vendor's own link (`Url` in the manifest).** If neither folder has the file, provisioning downloads it into `C:\CBR\installers`. Only for links that don't expire and need no sign-in.
 
 | App | How it's fetched |
@@ -25,10 +25,7 @@ Epic makes offline installers for both. They install silently, with no Epic Game
 1. A member of staff (Epic asks that students don't) fills in Epic's [UE EDU Offline Installer Request Form](https://forms.unrealengine.com/s/edu-offline-request), also linked from Epic's [Students & Schools](https://www.unrealengine.com/students-and-schools) page. Ask for RealityScan as well: a reply on Epic's forum says the same request covers its offline installer.
 2. Once Epic approves it, sign in to the [Epic Developer Portal](https://dev.epicgames.com/portal) and pick the CBR organisation. Unreal is under **Unreal Engine > Downloads**, with Type set to **Unreal Engine Offline Installer**. Download 5.6, and RealityScan from its downloads page there.
 3. Put the files, as downloaded, in `C:\CBR\installers` on JOHN and run provisioning. Unreal arrives as a .zip with an .msi inside; provisioning unpacks it. Copy the SHA-256 it prints into the manifest. If a file shows up under "Installer files that no app in the manifest uses", tell me its name so I can fix the pattern.
-4. For the other machines, copy the files across from JOHN before provisioning them. The hash check makes sure each copy is the tested one:
-   ```powershell
-   scp -r "cbradmin@CBR-JOHN:C:/CBR/installers" C:/CBR/
-   ```
+4. For the other machines, plug the install stick into JOHN and run `bootstrap.bat` → **Make or refresh the install USB stick**. It copies these installers onto the stick, and machines set up from it use them from there. The hash check makes sure each copy is the tested one. (Or copy them over the network, into `C:\CBR\installers` on the other machine: `scp -r "cbradmin@CBR-JOHN:C:/CBR/installers" C:/CBR/`.)
 
 Unreal's install options are its `Args` in the manifest: it goes to `C:\Program Files\Epic Games\UE_5.6` (where the launcher puts it too), without debug symbols (tens of GB) or the iOS, tvOS, Linux and HoloLens targets, and with Android for Quest. Epic doesn't document RealityScan's installer options: if it's an .msi it installs silently anyway; if it's an .exe it opens for you to click through.
 

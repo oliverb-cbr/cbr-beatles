@@ -69,6 +69,14 @@
         WslDistro     = 'Ubuntu-24.04'
         WslUser       = 'cbr'           # Linux user inside the WSL distro
 
+        # The install USB stick, made by bootstrap.bat (scripts\make-usb.ps1). Only a Windows ISO with
+        # this SHA-256 goes on it: the one tested in the VM. Ventoy is the boot menu on the stick.
+        WindowsIso    = @{ File = 'Windows11_Client_x64_en-gb_26300_9457.iso'
+                           Sha256 = '7E3F373BD3C2321B5D5125DFCF718DFBF1A0ABC50A267118669951890DF98A5D' }
+        Ventoy        = @{ Version = '1.1.17'
+                           Url = 'https://sourceforge.net/projects/ventoy/files/v1.1.17/ventoy-1.1.17-windows.zip/download'
+                           Sha256 = 'D250E97A7595FDAC4F97DEBC630D7A8DA942319274A76CB32384596B659DBAEB' }
+
         # Region: UK time (GMT/BST), UK English formats and keyboard. Also set by windows\autounattend.xml.
         TimeZone      = 'GMT Standard Time'
         Locale        = 'en-GB'
