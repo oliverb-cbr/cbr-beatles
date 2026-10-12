@@ -288,6 +288,18 @@ function Invoke-Winget([string[]]$Arguments) {
     if ($ok -notcontains $code) { throw "winget $($Arguments -join ' ') failed with exit code $code" }
 }
 
+# Removes a Store-style (MSIX) package for all users, including its machine-wide provisioning.
+function Remove-MsixCopy([string]$Name) {
+    foreach ($p in (Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like $Name })) {
+        Remove-AppxProvisionedPackage -Online -PackageName $p.PackageName -AllUsers | Out-Null
+        Write-Host "Removed Store-style copy (provisioned): $($p.DisplayName)"
+    }
+    foreach ($p in (Get-AppxPackage -AllUsers -Name $Name)) {
+        Remove-AppxPackage -Package $p.PackageFullName -AllUsers
+        Write-Host "Removed Store-style copy: $($p.Name)"
+    }
+}
+
 function Install-WingetApp($App, $Status) {
     $wgArgs = @('--id', $App.Id)
     $scope = 'machine'
@@ -296,12 +308,11 @@ function Install-WingetApp($App, $Status) {
     $override = @()
     if ($App.Override) { $override = @('--override', $App.Override) }
     # Some packages also offer a Store-style MSIX that winget may pick first. InstallerType forces the
-    # normal installer, and removes an MSIX copy left by an earlier run so the right one can go on.
+    # normal installer; MsixName removes an MSIX copy left by an earlier run, otherwise winget sees
+    # that copy, calls the package installed and never puts the normal one on.
     if ($App.InstallerType) {
         $override += @('--installer-type', $App.InstallerType)
-        if ($Status.Status -eq 'MISSING') {
-            & winget uninstall --id $App.Id --exact --silent --accept-source-agreements --disable-interactivity | Out-Null
-        }
+        if ($Status.Status -eq 'MISSING' -and $App.MsixName) { Remove-MsixCopy $App.MsixName }
     }
 
     if ($App.Policy -eq 'pinned') {

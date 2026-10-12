@@ -24,7 +24,8 @@
 #             manifests that don't declare one.
 #   Override  Replaces the installer's own arguments (used for Visual Studio workloads).
 #   InstallerType  Forces a particular installer when a package also offers a Store-style MSIX,
-#             which installs per user, outside Program Files, and isn't seen by the audit.
+#             which installs outside Program Files and isn't seen by the audit.
+#   MsixName  Package name (wildcards allowed) of that MSIX, so a copy from an earlier run is removed.
 #
 # installer-only fields
 #   Installer Wildcard matched against the file names in Settings.InstallerRoot, where all the
@@ -96,7 +97,7 @@
         @{ Name = 'WinDirStat';      Method = 'winget'; Id = 'WinDirStat.WinDirStat';       Policy = 'current'; Detect = 'WinDirStat*' }
         @{ Name = 'WinMerge';        Method = 'winget'; Id = 'WinMerge.WinMerge';           Policy = 'current'; Detect = 'WinMerge*' }
         @{ Name = '7-Zip';           Method = 'winget'; Id = '7zip.7zip';                   Policy = 'current'; Detect = '7-Zip*' }
-        @{ Name = 'PowerShell 7';    Method = 'winget'; Id = 'Microsoft.PowerShell';        Policy = 'current'; Detect = 'PowerShell 7*'; InstallerType = 'wix' }
+        @{ Name = 'PowerShell 7';    Method = 'winget'; Id = 'Microsoft.PowerShell';        Policy = 'current'; Detect = 'PowerShell 7*'; InstallerType = 'wix'; MsixName = 'Microsoft.PowerShell' }
         @{ Name = 'Steam';           Method = 'winget'; Id = 'Valve.Steam';                 Policy = 'current'; Detect = 'Steam' }
         @{ Name = 'SideQuest';       Method = 'winget'; Id = 'SideQuestVR.SideQuest';       Policy = 'current'; Detect = 'SideQuest*' }
 
@@ -130,7 +131,7 @@
         @{ Name = 'RealityScan';     Method = 'manual'; Policy = 'pinned'; Version = $null
            DetectPath = 'C:\Program Files\Epic Games\RealityScan*'
            Notes = 'Install from Epic Games Launcher, signed in with the CBR Epic account. Check the install path on JOHN.' }
-        @{ Name = 'Unity Hub';       Method = 'winget'; Id = 'Unity.UnityHub';              Policy = 'current'; Detect = 'Unity Hub*'; InstallerType = 'nullsoft' }
+        @{ Name = 'Unity Hub';       Method = 'winget'; Id = 'Unity.UnityHub';              Policy = 'current'; Detect = 'Unity Hub*'; InstallerType = 'nullsoft'; MsixName = '*UnityHub*' }
         # Fill in Version and Changeset (from the Unity download archive) to have provision install it.
         @{ Name = 'Unity Editor';    Method = 'unity'; Policy = 'pinned'; Version = $null; Changeset = $null
            Modules = @('windows-il2cpp', 'android', 'android-sdk-ndk-tools', 'android-open-jdk', 'webgl')
