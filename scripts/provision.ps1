@@ -350,7 +350,14 @@ function Open-InstallerPackage([string]$Path, $App) {
         $dest = Join-Path $env:TEMP ('cbr-' + [IO.Path]::GetFileNameWithoutExtension($Path))
         if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
         Write-Host "Unpacking $(Split-Path -Leaf $Path)..."
-        Expand-Archive -Path $Path -DestinationPath $dest
+        # 7-Zip (installed earlier in the app list) is much faster than Expand-Archive on big files.
+        $sevenZip = 'C:\Program Files\7-Zip\7z.exe'
+        if (Test-Path $sevenZip) {
+            & $sevenZip x $Path "-o$dest" -y -bso0
+            if ($LASTEXITCODE -ne 0) { throw "7-Zip couldn't unpack $(Split-Path -Leaf $Path) (exit $LASTEXITCODE)" }
+        } else {
+            Expand-Archive -Path $Path -DestinationPath $dest
+        }
         $script:Cleanup.Add({ Remove-Item $dest -Recurse -Force -ErrorAction SilentlyContinue }.GetNewClosure())
         $root = $dest
     } elseif ($ext -eq '.iso') {
@@ -434,7 +441,9 @@ function Install-VendorApp($App, $Status) {
         if ($App.Url) { $package = Save-VendorInstaller $App }
         else {
             $from = $(if ($App.DownloadPage) { " from $($App.DownloadPage)" } else { '' })
-            throw "No installer for $($App.Name) yet. Download it$from into $($settings.InstallerCache), then run this again."
+            $msg = "No installer for $($App.Name) yet. Download it$from into $($settings.InstallerCache), then run this again."
+            if ($App.Notes) { $msg += " $($App.Notes)" }
+            throw $msg
         }
     }
     Write-Host "Installer: $package"
@@ -442,7 +451,9 @@ function Install-VendorApp($App, $Status) {
     $path = Open-InstallerPackage $package $App
     if ($path -like '*.msi') {
         $exe = 'msiexec.exe'
-        $argList = "/i `"$path`" /qn /norestart $($App.Args)"
+        $msiLog = Join-Path $logDir (($App.Name -replace '[^\w.-]', '-') + '-msi.log')
+        Write-Host "Installing silently (log: $msiLog)..."
+        $argList = "/i `"$path`" /qn /norestart /l+ `"$msiLog`" $($App.Args)"
     } else {
         $exe = $path
         $argList = $App.Args
@@ -473,19 +484,36 @@ function Install-PortableApp($App, $Status) {
     }
 }
 
+# The changeset is part of every Unity download link; Unity's release list gives it for a version.
+function Get-UnityChangeset([string]$Version) {
+    $uri = "https://services.api.unity.com/unity/editor/release/v1/releases?version=$Version&platform=WINDOWS&architecture=X86_64"
+    $release = @((Invoke-RestMethod $uri -UseBasicParsing).results | Where-Object { $_.version -eq $Version })
+    if (-not $release.Count) { throw "Unity $Version isn't in Unity's release list. Check Version in the manifest." }
+    $release[0].shortRevision
+}
+
 function Install-UnityEditor($App, $Status) {
     if ($Status.Status -eq 'OK') { return }
-    if (-not $App.Version -or -not $App.Changeset) {
-        Write-Host "Unity Editor Version/Changeset not set in the manifest; skipping." -ForegroundColor Yellow
+    if (-not $App.Version) {
+        Write-Host "Unity Editor Version not set in the manifest; skipping." -ForegroundColor Yellow
         return
     }
     $hub = 'C:\Program Files\Unity Hub\Unity Hub.exe'
     if (-not (Test-Path $hub)) { throw "Unity Hub isn't installed at $hub" }
-    $hubArgs = @('--', '--headless', 'install', '--version', $App.Version, '--changeset', $App.Changeset)
+    $changeset = Get-UnityChangeset $App.Version
+    Write-Host "Installing Unity $($App.Version) (changeset $changeset) through Unity Hub. This takes a while."
+    # Unity Hub is a windowed program: PowerShell only waits for it when its output is piped.
+    # Its install folder is a per-user setting; set it to the shared one that DetectPath expects.
+    # Arguments go in arrays so PowerShell passes the leading '--' on to Unity Hub as it is.
+    $pathArgs = @('--', '--headless', 'install-path', '--set', 'C:\Program Files\Unity\Hub\Editor')
+    & $hub @pathArgs | Out-Host
+    $hubArgs = @('--', '--headless', 'install', '--version', $App.Version, '--changeset', $changeset)
     foreach ($m in $App.Modules) { $hubArgs += @('--module', $m) }
     $hubArgs += '--childModules'
-    & $hub @hubArgs
+    & $hub @hubArgs | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Unity Hub install exited with $LASTEXITCODE" }
+    $editor = Resolve-DetectPath $App
+    if (-not (Test-Path $editor)) { throw "Unity Hub finished, but there's no editor at $editor. See the Unity Hub output above." }
 }
 
 function Invoke-Apps {

@@ -2,7 +2,7 @@
 
 Build and maintenance scripts for the four CBR RTX 5090 workstations: **JOHN, PAUL, GEORGE and RINGO**.
 
-The idea: what a CBR workstation *is* lives in [`manifest.psd1`](manifest.psd1). The scripts make a machine match it and report when it doesn't. Nobody installs or updates software on these machines by hand except for the few apps marked `manual`.
+The idea: what a CBR workstation *is* lives in [`manifest.psd1`](manifest.psd1). The scripts make a machine match it and report when it doesn't. Nobody installs or updates software on these machines by hand, apart from Unreal and RealityScan until Epic's offline installers for them arrive (see [installers/README.md](installers/README.md#unreal-engine-and-realityscan)).
 
 ## How it fits together
 
@@ -10,7 +10,7 @@ The idea: what a CBR workstation *is* lives in [`manifest.psd1`](manifest.psd1).
 |---|---|---|
 | Windows install | Windows 11 Pro, UK settings, local `cbradmin`, no Microsoft account | `windows/autounattend.xml` |
 | Windows settings | Hostname, accounts, power, update policy, debloat, privacy, OpenSSH | `scripts/provision.ps1` |
-| Apps | ~36 apps via winget, vendor installers, Unity Hub or by hand | `manifest.psd1` |
+| Apps | 35 apps via winget, vendor installers and Unity Hub | `manifest.psd1` |
 | Linux / AI | WSL2 Ubuntu 24.04 + Docker Engine + NVIDIA container toolkit + uv | `scripts/user-setup.ps1`, `wsl/setup-docker.sh` |
 | Installers | Vendor installers: downloaded from the vendor where the link is stable, otherwise put in `C:\CBR\installers` by hand; all checked against a SHA-256 | `Url`, `Sha256` per app in the manifest |
 

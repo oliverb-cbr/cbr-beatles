@@ -9,7 +9,8 @@
 #             installer - vendor installer kept under InstallerRoot (see installers/README.md).
 #             portable  - zip of standalone programs (Url) unpacked into InstallDir, which is added
 #                         to the system PATH. For tools winget installs in a way staff can't run.
-#             unity     - Unity Editor installed through Unity Hub's headless CLI.
+#             unity     - Unity Editor installed through Unity Hub's headless CLI. Only Version is
+#                         needed: the changeset is looked up in Unity's release list.
 #             manual    - installed by hand; the scripts only check that it is there.
 #   Policy    current   - install latest; update.ps1 upgrades it.
 #             pinned    - must match Version exactly (prefix match, so '5.6' matches '5.6.1').
@@ -19,6 +20,8 @@
 #   Detect    Wildcard matched against the Apps & Features (uninstall registry) display name.
 #             Run scripts\find-app.ps1 '<pattern>' on JOHN to check a pattern matches one entry.
 #   DetectPath  Alternative to Detect: a path (wildcards allowed) that exists when installed.
+#             A path with the version in it (UE_5.6) counts as that version being installed.
+#   Notes     How to install it by hand, shown when it's missing and can't be installed automatically.
 #
 # winget-only fields
 #   Id        winget package id (checked against microsoft/winget-pkgs, October 2026).
@@ -133,16 +136,26 @@
 
         # ---- Game engines and Epic tools -------------------------------------------------
         @{ Name = 'Epic Games Launcher'; Method = 'winget'; Id = 'EpicGames.EpicGamesLauncher'; Policy = 'current'; Detect = 'Epic Games Launcher' }
-        @{ Name = 'Unreal Engine 5.6'; Method = 'manual'; Policy = 'pinned'; Version = '5.6'
+        # Unreal and RealityScan come from Epic's offline installers, which install silently. They're
+        # on the Epic Developer Portal once Epic approves CBR's education request (installers/README.md),
+        # and are put in C:\CBR\installers by hand. Until then, install them from the Epic Games Launcher.
+        @{ Name = 'Unreal Engine 5.6'; Method = 'installer'; Installer = '*Unreal*'; Inner = '*.msi'
+           # Leaves out debug symbols (tens of GB) and the iOS, tvOS, Linux and HoloLens targets; keeps Android for Quest.
+           Args = 'INSTALLLOCATION="C:\Program Files\Epic Games\UE_5.6" ENGINE_SYMBOLS_CHECKED=0 ENGINE_IOS_CHECKED=0 ENGINE_TVOS_CHECKED=0 ENGINE_LUMIN_CHECKED=0 ENGINE_HOLOLENS_CHECKED=0 ENGINE_LINUX_CHECKED=0'
+           Policy = 'pinned'; Version = '5.6'; Sha256 = $null
+           DownloadPage = 'the Epic Developer Portal (Unreal Engine > Downloads, type Unreal Engine Offline Installer)'
            DetectPath = 'C:\Program Files\Epic Games\UE_5.6\Engine\Binaries\Win64\UnrealEditor.exe'
-           Notes = 'Install from Epic Games Launcher, signed in with the CBR Epic account.' }
-        @{ Name = 'RealityScan';     Method = 'manual'; Policy = 'pinned'; Version = $null
-           DetectPath = 'C:\Program Files\Epic Games\RealityScan*'
-           Notes = 'Install from Epic Games Launcher, signed in with the CBR Epic account. Check the install path on JOHN.' }
+           Notes = 'Or install it from the Epic Games Launcher, signed in with the CBR Epic account.' }
+        @{ Name = 'RealityScan';     Method = 'installer'; Installer = '*RealityScan*'; Args = $null
+           Policy = 'pinned'; Version = $null; Sha256 = $null
+           DownloadPage = 'the Epic Developer Portal (RealityScan downloads)'
+           DetectPath = 'C:\Program Files\Epic Games\RealityScan*\RealityScan.exe'
+           Notes = 'Or install it from the Epic Games Launcher, signed in with the CBR Epic account.' }
         @{ Name = 'Unity Hub';       Method = 'winget'; Id = 'Unity.UnityHub';              Policy = 'current'; Detect = 'Unity Hub*'; InstallerType = 'nullsoft'; MsixName = '*UnityHub*' }
-        # Fill in Version and Changeset (from the Unity download archive) to have provision install it.
-        @{ Name = 'Unity Editor';    Method = 'unity'; Policy = 'pinned'; Version = $null; Changeset = $null
-           Modules = @('windows-il2cpp', 'android', 'android-sdk-ndk-tools', 'android-open-jdk', 'webgl')
+        # Latest LTS in October 2026. Modules are Unity Hub's ids; Android brings its JDK, SDK and NDK with it.
+        # Staff sign in to Unity Hub with the shared CBR Unity account to licence it.
+        @{ Name = 'Unity Editor';    Method = 'unity'; Policy = 'pinned'; Version = '6000.3.26f1'
+           Modules = @('windows-il2cpp', 'android', 'webgl')
            DetectPath = 'C:\Program Files\Unity\Hub\Editor\{Version}\Editor\Unity.exe' }
 
         # ---- Hardware and vendor tools ---------------------------------------------------

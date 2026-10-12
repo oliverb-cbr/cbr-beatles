@@ -40,7 +40,9 @@ Full details in [windows/README.md](../windows/README.md). With Ventoy:
 
 ### Vendor installers
 
-Nothing to prepare: provisioning downloads every vendor installer itself from the links in the manifest and checks each against the SHA-256 recorded there before running it (see [installers/README.md](../installers/README.md)).
+Provisioning downloads almost every vendor installer itself from the links in the manifest and checks each against the SHA-256 recorded there before running it (see [installers/README.md](../installers/README.md)). Unity Hub downloads the Unity Editor.
+
+- [ ] **Start this now, as Epic takes a while:** ask Epic for the Unreal Engine and RealityScan offline installers through its education request form. Details in [installers/README.md](../installers/README.md#unreal-engine-and-realityscan). Without them, those two are installed from the Epic Games Launcher by hand.
 
 ### Accounts and keys
 
@@ -108,9 +110,9 @@ On the PC where you turned on Hyper-V. If that PC is one of the four workstation
    powershell -ExecutionPolicy Bypass -File C:\CBR\cbr-beatles\scripts\user-setup.ps1
    ```
 
-**Expected to fail in the VM**, so ignore these: the NVIDIA driver, the vendor installers (Hyper-V VMs can't see USB sticks), and the final GPU check in `user-setup.ps1`.
+**Expected to fail in the VM**, so ignore these: the NVIDIA driver (no NVIDIA GPU), Unreal and RealityScan (until Epic's offline installers are in `C:\CBR\installers`), and the final GPU check in `user-setup.ps1`.
 
-**Everything else should work**: Windows settings, debloat, all the WinGet apps, WSL and Docker, and the audit.
+**Everything else should work**: Windows settings, debloat, the WinGet apps and vendor installers, the Unity Editor (a long download through Unity Hub), WSL and Docker, and the audit.
 
 ### The fix loop
 
@@ -149,10 +151,10 @@ Restore-VMCheckpoint -VMName CBR-Test -Name 'clean base' -Confirm:$false
 - [ ] Run `bootstrap.bat JOHN` from the USB stick. Click through the installers that open on their own (Insta360, the three LCC tools, MQDH).
 - [ ] Reboot when asked, then run `provision.ps1` again (command in phase 2).
 
-### Manual installs
+### Unreal, RealityScan and Unity
 
-- [ ] Epic Games Launcher (signed in as the CBR Epic account): Unreal Engine 5.6 and RealityScan.
-- [ ] Unity: either install the editor through Unity Hub, or put its `Version` and `Changeset` in the manifest and run provision again.
+- [ ] Unity: nothing to do. Provisioning installs the editor version in the manifest through Unity Hub.
+- [ ] Unreal and RealityScan: if Epic's offline installers are in `C:\CBR\installers`, provisioning installed them; copy the SHA-256s it printed into the manifest. If not, install both from the Epic Games Launcher, signed in as the CBR Epic account, into the default folders.
 - [ ] Check every app is detected: run `scripts\audit.ps1`. For any showing MISSING that is installed, find its real name with `scripts\find-app.ps1 '*name*'` and tell me, so I can fix its `Detect` pattern.
 
 ### Staff account
@@ -180,11 +182,15 @@ For each machine, follow phase 3 with its own name (`bootstrap.bat PAUL` and so 
 - [ ] Firmware: same BIOS version and settings as JOHN.
 - [ ] Windows, then **Check for updates**.
 - [ ] `bootstrap.bat <NAME>`, reboot, provision again.
-- [ ] Unreal: either let the Epic launcher download it (50+ GB), or copy it from JOHN over the network using the SSH server provisioning set up, then in the Epic launcher choose Install and point it at the copied folder so it checks the files instead of downloading. Try that on PAUL first:
+- [ ] Unreal and RealityScan, with Epic's offline installers: before the second provision run, copy them from JOHN (provisioning then installs them):
+  ```powershell
+  scp -r "cbradmin@CBR-JOHN:C:/CBR/installers" C:/CBR/
+  ```
+  Without them: either let the Epic launcher download Unreal (50+ GB), or copy it from JOHN, then in the Epic launcher choose Install and point it at the copied folder so it checks the files instead of downloading:
   ```powershell
   scp -r "cbradmin@CBR-JOHN:C:/Program Files/Epic Games/UE_5.6" "C:/Program Files/Epic Games/"
   ```
-- [ ] RealityScan and Unity as on JOHN.
+- [ ] Unity installs itself, as on JOHN.
 - [ ] As `CBR`: `user-setup.ps1`, then sign in to the shared accounts.
 - [ ] A quick smoke test: open one project in each of the main apps.
 

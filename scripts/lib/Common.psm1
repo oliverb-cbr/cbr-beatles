@@ -78,9 +78,8 @@ function Get-InstalledVersion($App) {
         if ($path -match '\{Version\}') { return $null }   # pinned version not chosen yet
         $item = Get-Item $path -ErrorAction SilentlyContinue | Select-Object -First 1
         if (-not $item) { return $null }
-        if ($App.Method -eq 'unity' -or $App.Method -eq 'manual') {
-            if ($App.Version -and $path -notmatch '[\*\?]') { return $App.Version }
-        }
+        # A path with the version in it (UE_5.6, Editor\6000.3.26f1) is proof of that version.
+        if ($App.Version -and $path -notmatch '[\*\?]' -and $path.Contains([string]$App.Version)) { return $App.Version }
         if ($item.VersionInfo -and $item.VersionInfo.ProductVersion) { return $item.VersionInfo.ProductVersion.Trim() }
         return ''
     }
