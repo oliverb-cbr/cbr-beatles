@@ -11,7 +11,8 @@ The installers themselves don't go in Git. The manifest is still the source of t
 | App | How it's fetched |
 |---|---|
 | NVIDIA Studio driver, TouchDesigner, Insta360 Studio and Stitcher, LCC Studio (.iso), LCC Editor, LCC Model Editor, Meta Quest Developer Hub (.zip) | Downloaded from the vendor's own link |
-| DaVinci Resolve | **By hand.** Blackmagic's links expire, so download it from their site and unzip it into `C:\CBR\installers` |
+
+Apps whose links expire or need a sign-in can still be added with a `DownloadPage` instead of a `Url`: the file is then put in `C:\CBR\installers` by hand. (DaVinci Resolve was dropped from the build for this reason: Blackmagic's download links are issued per registration and expire within hours.)
 
 When an installer can't be found or downloaded, provisioning says where to get it and carries on with everything else.
 

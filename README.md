@@ -37,7 +37,7 @@ Run them with `powershell -ExecutionPolicy Bypass -File <script>`.
 ## Version policy
 
 - **current**: browsers, utilities, Git, VS Code, Steam etc. `update.ps1` keeps them up to date.
-- **pinned**: Blender, TouchDesigner, Resolve, Unreal 5.6, Unity, RealityScan, NVIDIA driver, OBS, Processing, CloudCompare and the hardware tools. All four machines must have the same version.
+- **pinned**: Blender, TouchDesigner, Unreal 5.6, Unity, RealityScan, NVIDIA driver, OBS, Processing, CloudCompare and the hardware tools. All four machines must have the same version.
 
 To roll out a new pinned version: install and test it on JOHN, change `Version` in the manifest, commit, push, then `fleet.ps1 -Action Update`.
 

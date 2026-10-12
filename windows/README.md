@@ -37,4 +37,4 @@ Debloat and privacy settings aren't in here. `scripts/provision.ps1` applies the
 
 ## Why not NTLite
 
-NTLite edits the Windows image itself. That's hard to repeat exactly, can't be reviewed in Git, and removing Windows components can break Windows Update or software that quietly depends on them (Unreal, Resolve and WSL all lean on bits of Windows people like to strip). An answer file plus scripted removal of the preinstalled apps gets most of the benefit and stays reversible.
+NTLite edits the Windows image itself. That's hard to repeat exactly, can't be reviewed in Git, and removing Windows components can break Windows Update or software that quietly depends on them (Unreal, TouchDesigner and WSL all lean on bits of Windows people like to strip). An answer file plus scripted removal of the preinstalled apps gets most of the benefit and stays reversible.

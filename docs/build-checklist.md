@@ -40,12 +40,12 @@ Full details in [windows/README.md](../windows/README.md). With Ventoy:
 
 ### Vendor installers
 
-Provisioning downloads every vendor installer itself from the links in the manifest, except **DaVinci Resolve**: Blackmagic's links expire, so download it on each machine into `C:\CBR\installers` (unzip it) before provisioning, or carry it on the USB in a `cbr-deploy\installers` folder. Every installer is checked against the SHA-256 in the manifest before it runs (see [installers/README.md](../installers/README.md)).
+Nothing to prepare: provisioning downloads every vendor installer itself from the links in the manifest and checks each against the SHA-256 recorded there before running it (see [installers/README.md](../installers/README.md)).
 
 ### Accounts and keys
 
 - [ ] Shared CBR accounts, signed up with a CBR email address: Steam, Epic Games, Unity, Meta developer account.
-- [ ] Any licences: DaVinci Resolve Studio (if not the free version), Unity (Personal or Education), TouchDesigner (if commercial/educational keys).
+- [ ] Any licences: Unity (Personal or Education), TouchDesigner (if commercial/educational keys).
 - [ ] An SSH key for `fleet.ps1`, made on your own PC:
   ```powershell
   ssh-keygen -t ed25519 -f $HOME\.ssh\cbr_admin
@@ -162,7 +162,7 @@ Restore-VMCheckpoint -VMName CBR-Test -Name 'clean base' -Confirm:$false
 
 ### Test with real work
 
-- [ ] Blender GPU render, TouchDesigner project, Resolve export, Unreal 5.6 project (including a C++ build), Unity build.
+- [ ] Blender GPU render, TouchDesigner project, Unreal 5.6 project (including a C++ build), Unity build.
 - [ ] Insta360 stitch, LCC Studio and the LCC editors, VIVE Mars tracking, Quest through MQDH and SideQuest.
 - [ ] A PyTorch container using the GPU in WSL.
 
