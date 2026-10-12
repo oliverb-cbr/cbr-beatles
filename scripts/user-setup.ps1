@@ -46,4 +46,4 @@ if ($LASTEXITCODE -eq 2) {
 if ($LASTEXITCODE -ne 0) { throw "setup-docker.sh failed ($LASTEXITCODE)" }
 
 & wsl.exe --shutdown
-Write-Host "`nDone. Open Ubuntu from the Start menu; 'docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi' should list the 5090." -ForegroundColor Green
+Write-Host "`nDone. Open Ubuntu from the Start menu to use Docker and uv. On a workstation the GPU check above should have listed the RTX 5090." -ForegroundColor Green

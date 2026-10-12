@@ -62,8 +62,16 @@ nvidia-ctk runtime configure --runtime=docker
 systemctl restart docker
 
 # --- uv for the Linux user ----------------------------------------------------------------
+# WSL's network can take a few seconds to come up after a restart, so retry the download. (Piping
+# curl straight into sh hid a failed download; this way a failure stops the script.)
 if ! sudo -u "$LINUX_USER" -H bash -lc 'command -v uv' >/dev/null 2>&1; then
-    sudo -u "$LINUX_USER" -H sh -c 'curl -LsSf https://astral.sh/uv/install.sh | sh'
+    for attempt in 1 2 3 4 5; do
+        if curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv-install.sh; then break; fi
+        echo "Couldn't download the uv installer (attempt $attempt of 5); retrying in 5 seconds..."
+        sleep 5
+    done
+    sudo -u "$LINUX_USER" -H sh /tmp/uv-install.sh
+    rm -f /tmp/uv-install.sh
 fi
 
 # --- Check the GPU is visible to containers -----------------------------------------------
