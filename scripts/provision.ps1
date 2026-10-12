@@ -255,7 +255,13 @@ function Invoke-SystemConfig {
         $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server*'
         if ($cap.State -ne 'Installed') {
             Write-Host 'Downloading the OpenSSH Server feature from Microsoft. This can take 5-15 minutes with no output.'
-            Add-WindowsCapability -Online -Name $cap.Name | Out-Null
+            $result = Add-WindowsCapability -Online -Name $cap.Name
+            if ($result.RestartNeeded) { $script:RebootNeeded = $true }
+        }
+        if (-not (Get-Service sshd -ErrorAction SilentlyContinue)) {
+            Write-Host 'Installed, but the sshd service only appears after a restart. Run this script again then.'
+            $script:RebootNeeded = $true
+            return
         }
         Set-Service sshd -StartupType Automatic
         Start-Service sshd
@@ -289,6 +295,14 @@ function Install-WingetApp($App, $Status) {
     if ($scope) { $wgArgs += @('--scope', $scope) }
     $override = @()
     if ($App.Override) { $override = @('--override', $App.Override) }
+    # Some packages also offer a Store-style MSIX that winget may pick first. InstallerType forces the
+    # normal installer, and removes an MSIX copy left by an earlier run so the right one can go on.
+    if ($App.InstallerType) {
+        $override += @('--installer-type', $App.InstallerType)
+        if ($Status.Status -eq 'MISSING') {
+            & winget uninstall --id $App.Id --exact --silent --accept-source-agreements --disable-interactivity | Out-Null
+        }
+    }
 
     if ($App.Policy -eq 'pinned') {
         if ($Status.Status -eq 'MISSING' -or $Status.Status -eq 'WRONG-VERSION') {
