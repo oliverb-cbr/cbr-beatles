@@ -253,7 +253,10 @@ function Invoke-SystemConfig {
 
     Invoke-Step "OpenSSH server (lets fleet.ps1 audit and update this machine remotely)" {
         $cap = Get-WindowsCapability -Online -Name 'OpenSSH.Server*'
-        if ($cap.State -ne 'Installed') { Add-WindowsCapability -Online -Name $cap.Name | Out-Null }
+        if ($cap.State -ne 'Installed') {
+            Write-Host 'Downloading the OpenSSH Server feature from Microsoft. This can take 5-15 minutes with no output.'
+            Add-WindowsCapability -Online -Name $cap.Name | Out-Null
+        }
         Set-Service sshd -StartupType Automatic
         Start-Service sshd
         Set-RegistryValue 'HKLM:\SOFTWARE\OpenSSH' 'DefaultShell' 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' 'String'
