@@ -7,6 +7,8 @@
 #   Name      Display name used in logs and the audit.
 #   Method    winget    - installed with winget.
 #             installer - vendor installer kept under InstallerRoot (see installers/README.md).
+#             portable  - zip of standalone programs (Url) unpacked into InstallDir, which is added
+#                         to the system PATH. For tools winget installs in a way staff can't run.
 #             unity     - Unity Editor installed through Unity Hub's headless CLI.
 #             manual    - installed by hand; the scripts only check that it is there.
 #   Policy    current   - install latest; update.ps1 upgrades it.
@@ -34,6 +36,7 @@
 #             .zip and .iso files are opened and the installer inside is run.
 #   Url       Stable public download link. If no matching file is found, provisioning downloads it.
 #             Leave it out for links that expire or need a sign-in (use DownloadPage instead).
+#   FileName  Name to save a download as, for links that don't end in the file name.
 #   DownloadPage  Where to fetch it by hand, shown when there's no file and no Url.
 #   Sha256    SHA-256 of the tested installer. Every file is checked against it before it runs;
 #             provisioning prints the hash of files that don't have one yet, to copy in here.
@@ -113,7 +116,9 @@
         @{ Name = 'VS Code';         Method = 'winget'; Id = 'Microsoft.VisualStudioCode';  Policy = 'current'; Detect = 'Microsoft Visual Studio Code' }
         # The id pins the minor version (3.13.x); patches update. Projects use uv for other Pythons.
         @{ Name = 'Python 3.13';     Method = 'winget'; Id = 'Python.Python.3.13';          Policy = 'current'; Detect = 'Python 3.13.* (64-bit)' }
-        @{ Name = 'uv';              Method = 'winget'; Id = 'astral-sh.uv';                Policy = 'current'; DetectPath = 'C:\Program Files\WinGet\Links\uv.exe' }
+        # Not via winget: its machine-wide 'portable' install can only be run by admins.
+        @{ Name = 'uv';              Method = 'portable'; Url = 'https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-pc-windows-msvc.zip'
+           InstallDir = 'C:\Program Files\uv'; Policy = 'current'; DetectPath = 'C:\Program Files\uv\uv.exe' }
         # Needed for Unreal C++ projects, Unity IL2CPP and Python packages that compile native code.
         # Community edition is licensed for academic research.
         @{ Name = 'Visual Studio 2022'; Method = 'winget'; Id = 'Microsoft.VisualStudio.2022.Community'; Policy = 'current'; Detect = 'Visual Studio Community 2022'
@@ -146,14 +151,20 @@
         # Version is the driver number. '-nsd-' in the file name marks a Studio driver (Game Ready ones lack it).
         # Test a new one on JOHN, then change Version here.
         @{ Name = 'NVIDIA driver';   Method = 'installer'; Installer = '*-nsd-*'; Url = 'https://us.download.nvidia.com/Windows/617.42/617.42-desktop-win10-win11-64bit-international-nsd-dch-whql.exe'; Args = '-s -noreboot -noeula'; Policy = 'pinned'; Version = '617.42'; Detect = 'nvidia-driver' }
-        @{ Name = 'Insta360 Studio';   Method = 'installer'; Installer = 'Insta360_Studio*';    Args = $null; Policy = 'pinned'; Version = $null; Detect = 'Insta360 Studio*' }
-        @{ Name = 'Insta360 Stitcher'; Method = 'installer'; Installer = 'Insta360Stitcher*';   Args = $null; Policy = 'pinned'; Version = $null; Detect = 'Insta360*Stitcher*' }
+        @{ Name = 'Insta360 Studio';   Method = 'installer'; Installer = 'Insta360_Studio*';    Url = 'https://wassets.insta360.com/common/c28b0183013d44f0ac9afdf803100cd8/Insta360_Studio_6.0.6_release_insta360(RC_build99)_20260929_154023_1790667881441.exe'
+           Args = $null; Policy = 'pinned'; Version = $null; Detect = 'Insta360 Studio*' }
+        @{ Name = 'Insta360 Stitcher'; Method = 'installer'; Installer = 'Insta360Stitcher*';   Url = 'https://file.insta360.com/static/80e76b2df50579a44d44f6bba7fc07e2/Insta360Stitcher_Winx64_4.0.1_build_202506122124.zip'
+           Args = $null; Policy = 'pinned'; Version = $null; Detect = 'Insta360*Stitcher*' }
         # XGRIDS LCC tools. LCC Studio ships as an ISO; provisioning mounts it and runs the installer inside.
-        @{ Name = 'LCC Studio';        Method = 'installer'; Installer = 'LCCStudio*';          Args = $null; Policy = 'pinned'; Version = $null; Detect = 'LCC Studio*' }
-        @{ Name = 'LCC Editor';        Method = 'installer'; Installer = 'LCCEditorSetup*';     Args = $null; Policy = 'pinned'; Version = $null; Detect = 'LCC Editor*' }
-        @{ Name = 'LCC Model Editor';  Method = 'installer'; Installer = 'LCC Model Editor*';   Args = $null; Policy = 'pinned'; Version = $null; Detect = 'LCC Model Editor*' }
+        @{ Name = 'LCC Studio';        Method = 'installer'; Installer = 'LCCStudio*';          Url = 'https://d1hl53kddblsn9.cloudfront.net/prd/lixel/lixelstudio/2.5.0.025//LCCStudio_2.5.0.025_full_en.iso'
+           Args = $null; Policy = 'pinned'; Version = $null; Detect = 'LCC Studio*' }
+        @{ Name = 'LCC Editor';        Method = 'installer'; Installer = 'LCCEditorSetup*';     Url = 'https://d1hl53kddblsn9.cloudfront.net/lcc/app/LCCEditor/LCCEditorSetup_v2.5.0.018-online-en.exe'
+           Args = $null; Policy = 'pinned'; Version = $null; Detect = 'LCC Editor*' }
+        @{ Name = 'LCC Model Editor';  Method = 'installer'; Installer = 'LCC Model Editor*';   Url = 'https://d2x3vt26aihlkb.cloudfront.net/prd/LCC/LCC%20Model%20Editor/1.3.1.1/LCC%20Model%20Editor_v1.3.1.exe'
+           Args = $null; Policy = 'pinned'; Version = $null; Detect = 'LCC Model Editor*' }
         # Downloads as a .zip; provisioning unpacks it and runs the installer inside.
-        @{ Name = 'Meta Quest Developer Hub'; Method = 'installer'; Installer = 'Meta-Quest-Developer-Hub*'; Args = $null; Policy = 'current'; Detect = 'Meta Quest Developer Hub*' }
+        @{ Name = 'Meta Quest Developer Hub'; Method = 'installer'; Installer = 'Meta-Quest-Developer-Hub*'; Url = 'https://securecdn-lhr11-1.oculus.com/binaries/download/?id=28433721256286253'
+           FileName = 'Meta-Quest-Developer-Hub-6.5.2.exe.zip'; Args = $null; Policy = 'current'; Detect = 'Meta Quest Developer Hub*' }
         # VIVE Mars needs no PC software.
         # Kinect v2 SDK left out on purpose (no hardware). Add it here if that changes.
     )

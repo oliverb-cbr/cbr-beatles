@@ -390,7 +390,8 @@ function Resolve-VendorInstaller($App) {
 
 # Downloads an app's installer from its Url in the manifest into the installer cache.
 function Save-VendorInstaller($App) {
-    $name = [IO.Path]::GetFileName(([Uri]$App.Url).AbsolutePath)
+    # FileName is for links that don't end in the file's name (e.g. Meta's ?id= links).
+    $name = $(if ($App.FileName) { $App.FileName } else { [Uri]::UnescapeDataString([IO.Path]::GetFileName(([Uri]$App.Url).AbsolutePath)) })
     $dest = Join-Path $settings.InstallerCache $name
     Write-Host "Downloading $name..."
     & curl.exe --fail --location --retry 3 --progress-bar --output "$dest.partial" $App.Url
@@ -454,6 +455,24 @@ function Install-VendorApp($App, $Status) {
     elseif ($p.ExitCode -ne 0) { throw "$($App.Name) installer exited with $($p.ExitCode)" }
 }
 
+# A zip of standalone programs (uv): unpacked into InstallDir, which is added to the system PATH.
+# Used instead of winget's 'portable' installs, which standard users can't run.
+function Install-PortableApp($App, $Status) {
+    if ($Status.Status -ne 'MISSING' -and -not $Upgrade) { return }
+    $zip = Join-Path $env:TEMP ('cbr-' + [IO.Path]::GetFileName(([Uri]$App.Url).AbsolutePath))
+    Write-Host "Downloading $($App.Url)..."
+    & curl.exe --fail --location --retry 3 --progress-bar --output $zip $App.Url
+    if ($LASTEXITCODE -ne 0) { throw "Download failed (curl exit $LASTEXITCODE): $($App.Url)" }
+    New-Item -ItemType Directory -Force -Path $App.InstallDir | Out-Null
+    Expand-Archive -Path $zip -DestinationPath $App.InstallDir -Force
+    Remove-Item $zip -Force
+    $machinePath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+    if (($machinePath -split ';') -notcontains $App.InstallDir) {
+        [Environment]::SetEnvironmentVariable('Path', "$machinePath;$($App.InstallDir)", 'Machine')
+        Write-Host "Added $($App.InstallDir) to the system PATH (new windows pick it up)."
+    }
+}
+
 function Install-UnityEditor($App, $Status) {
     if ($Status.Status -eq 'OK') { return }
     if (-not $App.Version -or -not $App.Changeset) {
@@ -491,6 +510,7 @@ function Invoke-AppList {
             switch ($app.Method) {
                 'winget'    { Install-WingetApp $app $status }
                 'installer' { Install-VendorApp $app $status }
+                'portable'  { Install-PortableApp $app $status }
                 'unity'     { Install-UnityEditor $app $status }
                 'manual'    { if ($status.Status -ne 'OK') { $manual += $app } }
                 default     { throw "Unknown method '$($app.Method)'" }

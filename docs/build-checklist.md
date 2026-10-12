@@ -40,12 +40,7 @@ Full details in [windows/README.md](../windows/README.md). With Ventoy:
 
 ### Vendor installers
 
-NVIDIA and TouchDesigner download themselves during provisioning. The rest have to be fetched by hand (see [installers/README.md](../installers/README.md)): download them on each machine into `C:\CBR\installers` before provisioning, or carry them on the USB in a `cbr-deploy\installers` folder, which provisioning also looks in. Either way each file is checked against the SHA-256 in the manifest before it runs.
-
-- [ ] DaVinci Resolve (unzip it; Blackmagic's links expire)
-- [ ] Insta360 Studio and Insta360 Stitcher
-- [ ] LCC Studio (the .iso is fine), LCC Editor, LCC Model Editor
-- [ ] Meta Quest Developer Hub
+Provisioning downloads every vendor installer itself from the links in the manifest, except **DaVinci Resolve**: Blackmagic's links expire, so download it on each machine into `C:\CBR\installers` (unzip it) before provisioning, or carry it on the USB in a `cbr-deploy\installers` folder. Every installer is checked against the SHA-256 in the manifest before it runs (see [installers/README.md](../installers/README.md)).
 
 ### Accounts and keys
 
