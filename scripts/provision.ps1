@@ -17,7 +17,7 @@ param(
     [switch]$Upgrade,
     [switch]$SkipSystem,
     [switch]$SkipApps,
-    # Overrides Settings.InstallerRoot, e.g. -InstallerRoot E:\cbr-deploy\installers
+    # An extra folder of vendor installers to use, e.g. -InstallerRoot E:\cbr-deploy\installers
     [string]$InstallerRoot
 )
 
@@ -331,11 +331,14 @@ function Install-WingetApp($App, $Status) {
     }
 }
 
-# All vendor installers sit loose in one folder under their download names. Each app's Installer
-# field is a name pattern (e.g. 'TouchDesigner*'); this returns the one file it matches.
-# If several match (old and new versions), the one containing the manifest Version wins.
+# Vendor installers sit loose under their download names in C:\CBR\installers (Settings.InstallerCache,
+# where downloads land) and, if one is plugged in, an extra folder such as a USB stick or NAS
+# (Settings.InstallerRoot). Each app's Installer field is a name pattern (e.g. 'TouchDesigner*').
 function Get-InstallerFiles {
-    @(Get-ChildItem $script:InstallerRootPath -File | Where-Object { '.exe', '.msi', '.zip', '.iso' -contains $_.Extension.ToLower() })
+    @(foreach ($folder in $script:InstallerFolders) {
+        Get-ChildItem $folder -File -ErrorAction SilentlyContinue |
+            Where-Object { '.exe', '.msi', '.zip', '.iso' -contains $_.Extension.ToLower() }
+    })
 }
 
 # For a .zip or .iso, unpacks or mounts it and returns the installer inside; otherwise returns $Path.
@@ -369,42 +372,72 @@ function Open-InstallerPackage([string]$Path, $App) {
     throw "Several installers inside $(Split-Path -Leaf $Path): $(($candidates | ForEach-Object Name) -join ', '). Set Inner on this app in the manifest to pick one."
 }
 
+# Returns the installer file for an app, or $null if there isn't one in any installer folder.
+# If several match (old and new versions), the one whose name contains the manifest Version wins.
 function Resolve-VendorInstaller($App) {
     $found = @(Get-InstallerFiles | Where-Object { $_.Name -like $App.Installer })
+    # The same file in two folders counts once; the first folder (C:\CBR\installers) wins.
+    $found = @($found | Group-Object Name | ForEach-Object { $_.Group[0] })
     if ($found.Count -gt 1 -and $App.Version) {
         $found = @($found | Where-Object { $_.Name -like "*$($App.Version)*" })
     }
-    if ($found.Count -eq 0) {
-        $hint = $(if ($App.Version) { " for version $($App.Version)" } else { '' })
-        throw "No installer matching '$($App.Installer)'$hint in $($script:InstallerRootPath). Download it into that folder."
-    }
     if ($found.Count -gt 1) {
-        throw "Several installers match '$($App.Installer)': $(($found | ForEach-Object Name) -join ', '). Delete the old ones, or move them into a subfolder."
+        throw "Several installers match '$($App.Installer)': $(($found | ForEach-Object Name) -join ', '). Delete the old ones."
     }
-    $found[0].FullName
+    if ($found.Count -eq 1) { return $found[0].FullName }
+    $null
 }
 
-# Files in the installer folder that no app in the manifest claims: usually a pattern that needs fixing.
+# Downloads an app's installer from its Url in the manifest into the installer cache.
+function Save-VendorInstaller($App) {
+    $name = [IO.Path]::GetFileName(([Uri]$App.Url).AbsolutePath)
+    $dest = Join-Path $settings.InstallerCache $name
+    Write-Host "Downloading $name..."
+    & curl.exe --fail --location --retry 3 --progress-bar --output "$dest.partial" $App.Url
+    if ($LASTEXITCODE -ne 0) {
+        Remove-Item "$dest.partial" -ErrorAction SilentlyContinue
+        throw "Download failed (curl exit $LASTEXITCODE): $($App.Url)"
+    }
+    Move-Item "$dest.partial" $dest -Force
+    $dest
+}
+
+# The manifest's SHA-256 decides whether an installer file is the right one, wherever it came from.
+function Assert-InstallerHash($App, [string]$Path) {
+    $hash = (Get-FileHash $Path -Algorithm SHA256).Hash
+    if (-not $App.Sha256) {
+        Write-Host "No Sha256 in the manifest for $($App.Name). This file's is $hash" -ForegroundColor Yellow
+        return
+    }
+    if ($hash -ne $App.Sha256) {
+        throw "$(Split-Path -Leaf $Path) doesn't match the SHA-256 in the manifest: it's damaged or a different version. Delete it and download it again."
+    }
+    Write-Host 'SHA-256 matches the manifest.'
+}
+
+# Files in the installer folders that no app in the manifest claims: usually a pattern that needs fixing.
 function Show-UnclaimedInstallers {
-    if (-not $script:InstallerRootPath) { return }
     $patterns = @($manifest.Apps | Where-Object { $_.Method -eq 'installer' } | ForEach-Object Installer)
     $unclaimed = @(Get-InstallerFiles | Where-Object { $name = $_.Name; -not ($patterns | Where-Object { $name -like $_ }) })
     if ($unclaimed.Count) {
-        Write-Step "Installers on the USB that no app in the manifest uses"
-        $unclaimed | ForEach-Object { Write-Host " - $($_.Name)" -ForegroundColor Yellow }
+        Write-Step "Installer files that no app in the manifest uses"
+        $unclaimed | ForEach-Object { Write-Host " - $($_.FullName)" -ForegroundColor Yellow }
         Write-Host "Either an app's Installer pattern in manifest.psd1 needs changing, or the file isn't needed."
     }
 }
 
 function Install-VendorApp($App, $Status) {
     if ($Status.Status -eq 'OK' -or $Status.Status -eq 'UNPINNED') { return }
-    if (-not $script:InstallerRootPath) { throw "Installer folder '$script:InstallerRootWanted' not found on any drive. Plug in the install USB." }
     $package = Resolve-VendorInstaller $App
-    Write-Host "Installer: $package"
-    if ($App.Sha256) {
-        $hash = (Get-FileHash $package -Algorithm SHA256).Hash
-        if ($hash -ne $App.Sha256) { throw "SHA-256 mismatch for $package" }
+    if (-not $package) {
+        if ($App.Url) { $package = Save-VendorInstaller $App }
+        else {
+            $from = $(if ($App.DownloadPage) { " from $($App.DownloadPage)" } else { '' })
+            throw "No installer for $($App.Name) yet. Download it$from into $($settings.InstallerCache), then run this again."
+        }
     }
+    Write-Host "Installer: $package"
+    Assert-InstallerHash $App $package
     $path = Open-InstallerPackage $package $App
     if ($path -like '*.msi') {
         $exe = 'msiexec.exe'
@@ -442,10 +475,13 @@ function Invoke-Apps {
 }
 
 function Invoke-AppList {
-    $script:InstallerRootWanted = $(if ($InstallerRoot) { $InstallerRoot } else { $settings.InstallerRoot })
-    $script:InstallerRootPath = Resolve-InstallerRoot $script:InstallerRootWanted
-    if ($script:InstallerRootPath) { Write-Host "Vendor installers: $($script:InstallerRootPath)" }
-    else { Write-Warning "Installer folder '$($script:InstallerRootWanted)' not found on any drive; vendor installs will be skipped." }
+    # Installer folders: the local cache always; the extra folder (USB / NAS) only if it's there.
+    New-Item -ItemType Directory -Force -Path $settings.InstallerCache | Out-Null
+    $script:InstallerFolders = @($settings.InstallerCache)
+    $wanted = $(if ($InstallerRoot) { $InstallerRoot } else { $settings.InstallerRoot })
+    $extra = $(if ($wanted) { Resolve-InstallerRoot $wanted } else { $null })
+    if ($extra) { $script:InstallerFolders += $extra }
+    Write-Host "Vendor installers: $($script:InstallerFolders -join ', ')"
 
     $manual = @()
     foreach ($app in $manifest.Apps) {

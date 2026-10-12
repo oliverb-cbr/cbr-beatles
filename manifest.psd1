@@ -28,14 +28,17 @@
 #   MsixName  Package name (wildcards allowed) of that MSIX, so a copy from an earlier run is removed.
 #
 # installer-only fields
-#   Installer Wildcard matched against the file names in Settings.InstallerRoot, where all the
-#             installers sit loose under their download names. If an old and a new version both
-#             match, the one whose name contains Version is used. Provisioning lists any file
-#             no pattern matches, so a wrong pattern shows up. .zip and .iso files are opened
-#             and the installer inside is run.
+#   Installer Wildcard matched against installer file names (they keep their download names). If an
+#             old and a new version both match, the one whose name contains Version is used.
+#             Provisioning lists any file no pattern matches, so a wrong pattern shows up.
+#             .zip and .iso files are opened and the installer inside is run.
+#   Url       Stable public download link. If no matching file is found, provisioning downloads it.
+#             Leave it out for links that expire or need a sign-in (use DownloadPage instead).
+#   DownloadPage  Where to fetch it by hand, shown when there's no file and no Url.
+#   Sha256    SHA-256 of the tested installer. Every file is checked against it before it runs;
+#             provisioning prints the hash of files that don't have one yet, to copy in here.
 #   Inner     Optional, for .zip/.iso: pattern for the installer inside, if there's more than one.
 #   Args      Silent-install arguments. $null = run the installer interactively and wait.
-#   Sha256    Optional; checked before running when set.
 
 @{
     # Machines: Name is used by fleet.ps1 -Machine; ComputerName is the Windows hostname;
@@ -49,9 +52,12 @@
 
     Settings = @{
         RepoPath      = 'C:\CBR\cbr-beatles'
-        # Vendor installers. A relative path is searched for at the root of every drive, so this finds
-        # the folder on the install USB whatever letter it gets. A full path (e.g. a NAS share) also works.
-        InstallerRoot = 'cbr-deploy\installers'
+        # Vendor installers. Downloads land in InstallerCache, and installers that can't be downloaded
+        # automatically are put there by hand. InstallerRoot is an optional extra place to look: a
+        # relative path is searched for at the root of every drive (a USB stick), a full path can be a
+        # NAS share. Either way the manifest's Sha256 decides whether a file is the right one.
+        InstallerCache = 'C:\CBR\installers'
+        InstallerRoot  = 'cbr-deploy\installers'
         AdminUser     = 'cbradmin'      # local admin, created during Windows setup
         SharedUser    = 'CBR'           # standard (non-admin) account staff log in with
         WslDistro     = 'Ubuntu-24.04'
@@ -118,9 +124,9 @@
         @{ Name = 'Blender';         Method = 'winget'; Id = 'BlenderFoundation.Blender';   Policy = 'pinned'; Version = $null; Detect = 'Blender*' }
         @{ Name = 'OBS Studio';      Method = 'winget'; Id = 'OBSProject.OBSStudio';        Policy = 'pinned'; Version = $null; Detect = 'OBS Studio' }
         @{ Name = 'CloudCompare';    Method = 'winget'; Id = 'CloudCompare.CloudCompare';   Policy = 'pinned'; Version = $null; Detect = 'CloudCompare*'; Scope = '' }
-        @{ Name = 'TouchDesigner';   Method = 'installer'; Installer = 'TouchDesigner*';  Args = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'; Policy = 'pinned'; Version = $null; Detect = 'TouchDesigner*' }
+        @{ Name = 'TouchDesigner';   Method = 'installer'; Installer = 'TouchDesigner*';  Url = 'https://download.derivative.ca/TouchDesigner.2025.33230.exe'; Args = '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'; Policy = 'pinned'; Version = $null; Detect = 'TouchDesigner*' }
         # Silent arguments for Resolve's installer: check on JOHN before relying on them.
-        @{ Name = 'DaVinci Resolve'; Method = 'installer'; Installer = '*Resolve*'; Args = '/i /q /noreboot'; Policy = 'pinned'; Version = $null; Detect = 'DaVinci Resolve*' }
+        @{ Name = 'DaVinci Resolve'; Method = 'installer'; Installer = '*Resolve*'; DownloadPage = 'https://www.blackmagicdesign.com/support/family/davinci-resolve-and-fusion'; Args = '/i /q /noreboot'; Policy = 'pinned'; Version = $null; Detect = 'DaVinci Resolve*' }
 
         # ---- Game engines and Epic tools -------------------------------------------------
         @{ Name = 'Epic Games Launcher'; Method = 'winget'; Id = 'EpicGames.EpicGamesLauncher'; Policy = 'current'; Detect = 'Epic Games Launcher' }
@@ -139,7 +145,7 @@
         # ---- Hardware and vendor tools ---------------------------------------------------
         # Version is the driver number. '-nsd-' in the file name marks a Studio driver (Game Ready ones lack it).
         # Test a new one on JOHN, then change Version here.
-        @{ Name = 'NVIDIA driver';   Method = 'installer'; Installer = '*-nsd-*'; Args = '-s -noreboot -noeula'; Policy = 'pinned'; Version = '617.42'; Detect = 'nvidia-driver' }
+        @{ Name = 'NVIDIA driver';   Method = 'installer'; Installer = '*-nsd-*'; Url = 'https://us.download.nvidia.com/Windows/617.42/617.42-desktop-win10-win11-64bit-international-nsd-dch-whql.exe'; Args = '-s -noreboot -noeula'; Policy = 'pinned'; Version = '617.42'; Detect = 'nvidia-driver' }
         @{ Name = 'Insta360 Studio';   Method = 'installer'; Installer = 'Insta360_Studio*';    Args = $null; Policy = 'pinned'; Version = $null; Detect = 'Insta360 Studio*' }
         @{ Name = 'Insta360 Stitcher'; Method = 'installer'; Installer = 'Insta360Stitcher*';   Args = $null; Policy = 'pinned'; Version = $null; Detect = 'Insta360*Stitcher*' }
         # XGRIDS LCC tools. LCC Studio ships as an ISO; provisioning mounts it and runs the installer inside.
