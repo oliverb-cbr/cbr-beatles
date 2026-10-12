@@ -157,7 +157,7 @@
         @{ Name = 'LCC Studio';        Method = 'installer'; Installer = 'LCCStudio*';          Url = 'https://d1hl53kddblsn9.cloudfront.net/prd/lixel/lixelstudio/2.5.0.025//LCCStudio_2.5.0.025_full_en.iso'
            Args = $null; Policy = 'pinned'; Version = '2.5.0.025'; Detect = 'LCC Studio*'; Sha256 = '132D87FF83972BC8C3FE5E217AAB0C49C868B07538E7805D14D65066DD889145' }
         @{ Name = 'LCC Editor';        Method = 'installer'; Installer = 'LCCEditorSetup*';     Url = 'https://d1hl53kddblsn9.cloudfront.net/lcc/app/LCCEditor/LCCEditorSetup_v2.5.0.018-online-en.exe'
-           Args = $null; Policy = 'pinned'; Version = $null; Detect = 'LCC Editor*'; Sha256 = 'D44F992B9FB6EF3C89ED10E56264A3254B87BAC77638D9A13C7D7E0471BEBE6C' }
+           Args = $null; Policy = 'pinned'; Version = '2.5.0'; Detect = 'LCCEditor*'; Sha256 = 'D44F992B9FB6EF3C89ED10E56264A3254B87BAC77638D9A13C7D7E0471BEBE6C' }
         @{ Name = 'LCC Model Editor';  Method = 'installer'; Installer = 'LCC Model Editor*';   Url = 'https://d2x3vt26aihlkb.cloudfront.net/prd/LCC/LCC%20Model%20Editor/1.3.1.1/LCC%20Model%20Editor_v1.3.1.exe'
            Args = $null; Policy = 'pinned'; Version = '1.3.1.1'; Detect = 'LCC Model Editor*'; Sha256 = '3BE825C4F66842A88C410AB5844E8C747C2016C6085A5AC25F5B1684D377571B' }
         # Downloads as a .zip; provisioning unpacks it and runs the installer inside.

@@ -41,7 +41,7 @@ Run them with `powershell -ExecutionPolicy Bypass -File <script>`.
 
 To roll out a new pinned version: install and test it on JOHN, change `Version` in the manifest, commit, push, then `fleet.ps1 -Action Update`.
 
-Pinned apps start with `Version = $null`. The first build installs the latest, the audit shows them as `UNPINNED`, and once JOHN is tested you copy the installed versions from the audit into the manifest.
+The pinned versions in the manifest are the ones installed and checked in the VM test. A pinned app with `Version = $null` installs the latest and shows as `UNPINNED` in the audit until you copy its installed version into the manifest.
 
 ## Building the machines
 
