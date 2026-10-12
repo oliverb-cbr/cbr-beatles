@@ -67,4 +67,11 @@ if ! sudo -u "$LINUX_USER" -H bash -lc 'command -v uv' >/dev/null 2>&1; then
 fi
 
 # --- Check the GPU is visible to containers -----------------------------------------------
-docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
+# WSL exposes the Windows NVIDIA driver's tools under /usr/lib/wsl/lib. If they're not there
+# (no NVIDIA GPU or driver, e.g. in a test VM), skip the check rather than fail.
+if [ -x /usr/lib/wsl/lib/nvidia-smi ]; then
+    docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
+else
+    echo "No NVIDIA driver visible to WSL (fine in a VM); skipping the GPU check."
+    docker run --rm hello-world
+fi
