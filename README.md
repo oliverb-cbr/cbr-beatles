@@ -4,6 +4,16 @@ Build and maintenance scripts for the four CBR RTX 5090 workstations: **JOHN, PA
 
 The idea: what a CBR workstation *is* lives in [`manifest.psd1`](manifest.psd1). The scripts make a machine match it and report when it doesn't. Nobody installs or updates software on these machines by hand, apart from Unreal and RealityScan until Epic's offline installers for them arrive (see [installers/README.md](installers/README.md#unreal-engine-and-realityscan)).
 
+## Start here
+
+On any Windows PC, open PowerShell (right-click Start → Terminal) and run:
+
+```powershell
+irm https://raw.githubusercontent.com/oliverb-cbr/cbr-beatles/HEAD/go.ps1 | iex
+```
+
+It asks for administrator rights, gets the latest scripts and shows a menu: make the install USB stick, set up this PC as one of the four, update it or check it. It only offers what's safe on the PC it's on. Running `bootstrap.bat` (also on the install stick) does the same. No GitHub sign-in is needed while the repo is public.
+
 ## How it fits together
 
 | Layer | What | Where it's defined |

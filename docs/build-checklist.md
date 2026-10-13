@@ -18,7 +18,13 @@ Don't skip phase 2. Most of the early problems will be script bugs, and a VM che
 | A PC just installed from the stick | Set it up as JOHN, PAUL, GEORGE or RINGO, or make the stick |
 | A CBR workstation | Update it, check it, or refresh the stick |
 
-Get it from GitHub (open `bootstrap.bat` in the repo, then "Download raw file") or from the stick, and double-click it. If Windows says it "protected your PC", choose More info → Run anyway; it does that for any downloaded script.
+Start it with one command in PowerShell (right-click Start → Terminal). It needs no GitHub sign-in:
+
+```powershell
+irm https://raw.githubusercontent.com/oliverb-cbr/cbr-beatles/HEAD/go.ps1 | iex
+```
+
+Or double-click `bootstrap.bat` on the install stick; it's the same thing. If Windows says it "protected your PC", choose More info → Run anyway.
 
 ---
 
@@ -32,7 +38,7 @@ Do all of this on your own PC before touching the workstations.
 
 ### The install USB stick
 
-- [ ] Plug in the stick (128 GB is plenty) and run `bootstrap.bat`. Choose **Make or refresh the install USB stick**.
+- [ ] Plug in the stick (128 GB is plenty) and run the command above. Choose **Make or refresh the install USB stick**.
   - It only offers USB drives of 260 GB or less, so a big external drive can't be picked by mistake.
   - A stick without Ventoy is erased once you type `ERASE`. A stick that has Ventoy already keeps everything on it.
   - It finds the ISO in Downloads (or asks you to pick it), checks it, copies it, then checks the copy.
@@ -103,7 +109,7 @@ Hyper-V VMs can't boot from a USB stick, so the VM gets the ISO and a small seco
 
 ### Run the scripts
 
-1. In the VM, signed in as `cbradmin`, get `bootstrap.bat` from GitHub and run it. Choose **Set up this PC**, then `JOHN`, and type `JOHN` to confirm.
+1. In the VM, signed in as `cbradmin`, run the command above in PowerShell. Choose **Set up this PC**, then `JOHN`, and type `JOHN` to confirm.
 2. It asks for a password for the `CBR` staff account (twice), then installs everything. Click through the installers that open on their own.
 3. When it asks, press Enter to restart. Sign in as `cbradmin` again: setup carries on by itself in a window and says when it's finished.
 4. Sign out and sign in as `CBR`. The staff setup (Ubuntu, Docker, GPU support) starts by itself in a window.
