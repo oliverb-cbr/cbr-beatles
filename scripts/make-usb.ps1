@@ -265,6 +265,22 @@ $hasVentoy = Test-VentoyDisk $disk
 Write-Step 'Windows ISO'
 $iso = Get-IsoToCopy $disk $hasVentoy
 
+# Checked now, before anything is erased.
+if ($iso) {
+    $isoBytes = (Get-Item $iso.Path).Length
+    if ($hasVentoy) {
+        $stickRoot = Get-StickRoot $disk
+        $room = (Get-Volume -DriveLetter $stickRoot.Substring(0, 1)).SizeRemaining
+        $old = Join-Path $stickRoot ("ISO\Windows11\" + (Split-Path -Leaf $iso.Path))
+        if (Test-Path $old) { $room += (Get-Item $old).Length }
+    } else {
+        $room = $disk.Size - 100MB   # Ventoy's own partitions take a few MB
+    }
+    if ($isoBytes -gt $room) {
+        throw "Not enough room on the stick for the Windows ISO: it needs $([math]::Ceiling($isoBytes / 1GB)) GB, and there's $([math]::Floor($room / 1GB)) GB."
+    }
+}
+
 Write-Step 'Ventoy (the stick''s boot menu)'
 if ($hasVentoy) {
     Write-Host 'The stick has Ventoy already, so nothing on it is erased.'
