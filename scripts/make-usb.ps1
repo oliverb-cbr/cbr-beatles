@@ -25,11 +25,32 @@ $settings = $manifest.Settings
 $repo = Get-CbrRepoRoot
 $maxStickGB = 260
 
+# Most sticks report their bus as USB. Fast ones (and USB SSDs) using UAS can report SCSI
+# instead, so also check whether the disk's device hangs off a USB port.
+function Test-OnUsb($Disk) {
+    if ($Disk.BusType -eq 'USB') { return $true }
+    $drive = Get-CimInstance Win32_DiskDrive -Filter "Index=$($Disk.Number)" -ErrorAction SilentlyContinue
+    if (-not $drive) { return $false }
+    if ($drive.InterfaceType -eq 'USB') { return $true }
+    $id = $drive.PNPDeviceID
+    for ($i = 0; $i -lt 3 -and $id; $i++) {
+        $id = (Get-PnpDeviceProperty -InstanceId $id -KeyName DEVPKEY_Device_Parent -ErrorAction SilentlyContinue).Data
+        if ($id -like 'USB\*') { return $true }
+    }
+    $false
+}
+
+# Why a disk can't be the stick, or $null if it can.
+function Get-StickProblem($Disk) {
+    if ($Disk.IsBoot -or $Disk.IsSystem) { return 'Windows is on it' }
+    if ($Disk.Size -le 0) { return 'no media in it' }
+    if ($Disk.Size -gt $maxStickGB * 1GB) { return "over $maxStickGB GB" }
+    if (-not (Test-OnUsb $Disk)) { return 'not plugged in by USB' }
+    $null
+}
+
 function Get-UsbSticks {
-    @(Get-Disk | Where-Object {
-        $_.BusType -eq 'USB' -and -not $_.IsBoot -and -not $_.IsSystem -and
-        $_.Size -gt 0 -and $_.Size -le $maxStickGB * 1GB
-    } | Sort-Object Number)
+    @(Get-Disk | Where-Object { -not (Get-StickProblem $_) } | Sort-Object Number)
 }
 
 function Get-DriveLetters($Disk) {
@@ -56,7 +77,11 @@ function Select-Stick {
     while ($true) {
         $sticks = Get-UsbSticks
         if (-not $sticks.Count) {
-            Write-Host "No USB stick found. Plug it in. (USB drives over $maxStickGB GB aren't offered, so a big external drive can't be picked by mistake.)" -ForegroundColor Yellow
+            Write-Host "No USB stick found. USB drives over $maxStickGB GB aren't offered, so a big external drive can't be picked by mistake." -ForegroundColor Yellow
+            Write-Host 'The disks on this PC, and why each was left out:'
+            foreach ($d in Get-Disk | Sort-Object Number) {
+                Write-Host "  disk $($d.Number): $($d.FriendlyName), bus $($d.BusType), $([math]::Round($d.Size / 1GB)) GB - $(Get-StickProblem $d)"
+            }
             if ((Read-Host 'Press Enter to look again, or type Q to quit').Trim().ToUpper() -eq 'Q') { return $null }
             continue
         }
@@ -174,8 +199,12 @@ function Install-Ventoy($Disk) {
     $work = $exe.DirectoryName
 
     Write-Host "Installing Ventoy on disk $($Disk.Number). This takes a minute or two..."
-    # Ventoy's command-line mode. /I installs, erasing the disk; Ventoy itself refuses non-USB disks.
-    Start-Process $exe.FullName -ArgumentList "VTOYCLI /I /PhyDrive:$($Disk.Number)" -WorkingDirectory $work -Wait
+    # Ventoy's command-line mode. /I installs, erasing the disk. Ventoy refuses disks that don't
+    # report their bus as USB; a UAS stick reports SCSI, so after Test-OnUsb has checked it's on
+    # a USB port, that check is turned off for it.
+    $ventoyArgs = "VTOYCLI /I /PhyDrive:$($Disk.Number)"
+    if ($Disk.BusType -ne 'USB') { $ventoyArgs += ' /NOUSBCheck' }
+    Start-Process $exe.FullName -ArgumentList $ventoyArgs -WorkingDirectory $work -Wait
     # It writes 0 (worked) or 1 (failed) to cli_done.txt once it has finished.
     $done = Join-Path $work 'cli_done.txt'
     $deadline = (Get-Date).AddMinutes(10)
