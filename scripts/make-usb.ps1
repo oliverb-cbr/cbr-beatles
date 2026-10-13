@@ -50,7 +50,7 @@ function Get-StickProblem($Disk) {
 }
 
 function Get-UsbSticks {
-    @(Get-Disk | Where-Object { -not (Get-StickProblem $_) } | Sort-Object Number)
+    Get-Disk | Where-Object { -not (Get-StickProblem $_) } | Sort-Object Number
 }
 
 function Get-DriveLetters($Disk) {
@@ -75,7 +75,8 @@ function Get-DiskSummary($Disk) {
 
 function Select-Stick {
     while ($true) {
-        $sticks = Get-UsbSticks
+        # @() keeps a single stick a list; a function hands back one result on its own.
+        $sticks = @(Get-UsbSticks)
         if (-not $sticks.Count) {
             Write-Host "No USB stick found. USB drives over $maxStickGB GB aren't offered, so a big external drive can't be picked by mistake." -ForegroundColor Yellow
             Write-Host 'The disks on this PC, and why each was left out:'
