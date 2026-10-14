@@ -43,7 +43,10 @@ $checks = @(
     New-Check 'Telemetry at minimum' $telemetry ($telemetry -eq 1)
     New-Check 'Preinstalled apps removed' $bloat ($bloat -eq 'none')
     New-Check 'System drive not encrypted' $encryption ($encryption -eq 'FullyDecrypted')
-    New-Check 'OneDrive removed' $(if ($oneDrive) { 'installed' } else { 'absent' }) (-not $oneDrive)
+    # Removed is the aim; a copy that the policy stops from running is harmless.
+    $oneDriveBlocked = (Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive' -ErrorAction SilentlyContinue).DisableFileSyncNGSC -eq 1
+    $oneDriveState = $(if (-not $oneDrive) { 'absent' } elseif ($oneDriveBlocked) { 'installed but blocked' } else { 'installed' })
+    New-Check 'OneDrive removed or blocked' $oneDriveState ((-not $oneDrive) -or $oneDriveBlocked)
     $staff = Test-Path (Get-StaffSetupMarker)
     New-Check "WSL + Docker set up for $($manifest.Settings.SharedUser)" $(if ($staff) { 'yes' } else { "no: sign in as $($manifest.Settings.SharedUser)" }) $staff
     New-Check 'sshd running' (Get-Service sshd -ErrorAction SilentlyContinue).Status ((Get-Service sshd -ErrorAction SilentlyContinue).Status -eq 'Running')

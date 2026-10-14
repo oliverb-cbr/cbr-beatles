@@ -107,6 +107,39 @@ function Set-UserSettings([string]$Root) {
     Remove-ItemProperty "$cv\Run" -Name 'OneDriveSetup' -ErrorAction SilentlyContinue
 }
 
+# OneDrive comes either per machine (Program Files) or per account (installed at each account's
+# first sign-in, which Set-UserSettings stops for new accounts). winget's uninstall fails on some
+# builds (0x8004069B), so this stops OneDrive and runs each copy's own uninstaller instead.
+# The policy is what matters most: it stops OneDrive running or syncing for anyone, even if a copy
+# is left behind.
+function Remove-OneDrive {
+    Set-RegistryValue 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive' 'DisableFileSyncNGSC' 1
+    $keys = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    $entries = @(Get-ItemProperty $keys -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -like 'Microsoft OneDrive*' -and $_.UninstallString })
+    if (-not $entries.Count) { Write-Host 'Not installed.'; return }
+
+    Get-Process OneDrive, FileCoAuth -ErrorAction SilentlyContinue | Stop-Process -Force
+    foreach ($e in $entries) {
+        # e.g. "C:\...\OneDriveSetup.exe" /uninstall /allusers
+        if ($e.UninstallString -notmatch '^\s*"([^"]+)"\s*(.*)$' -and $e.UninstallString -notmatch '^\s*(\S+)\s*(.*)$') { continue }
+        $exe = $Matches[1]
+        $uninstallArgs = $Matches[2]
+        if ($uninstallArgs -notmatch '/silent') { $uninstallArgs += ' /silent' }
+        Write-Host "Uninstalling $($e.DisplayName): $exe $uninstallArgs"
+        if (Test-Path $exe) { Start-Process $exe -ArgumentList $uninstallArgs -Wait }
+    }
+    Reset-InstalledProgramsCache
+    $left = @(Get-InstalledPrograms | Where-Object { $_.DisplayName -like 'Microsoft OneDrive*' })
+    if ($left.Count) {
+        Write-Host "OneDrive is still installed, but the policy stops it running. This step tries again next time." -ForegroundColor Yellow
+    } else {
+        Write-Host 'Removed.'
+    }
+}
+
 # Runs Set-UserSettings against a hive file that isn't loaded (a signed-out user, or the Default
 # profile that new accounts are copied from).
 function Set-UserSettingsInHiveFile([string]$HiveFile) {
@@ -254,12 +287,7 @@ function Invoke-SystemConfig {
     }
 
     Invoke-Step "Remove OneDrive" {
-        Set-RegistryValue 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive' 'DisableFileSyncNGSC' 1
-        $oneDrive = Get-InstalledPrograms | Where-Object { $_.DisplayName -like 'Microsoft OneDrive*' }
-        if ($oneDrive) {
-            & winget uninstall --id Microsoft.OneDrive --exact --silent --accept-source-agreements --disable-interactivity
-            Reset-InstalledProgramsCache
-        } else { Write-Host "Not installed." }
+        Remove-OneDrive
     }
 
     Invoke-Step "Remove preinstalled Store apps (Settings.RemoveAppx in the manifest)" {
