@@ -341,7 +341,8 @@ function Invoke-SystemConfig {
 # Apps
 # ---------------------------------------------------------------------------------------------
 function Invoke-Winget([string[]]$Arguments) {
-    $common = @('--exact', '--silent', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity')
+    # --source winget: never the Microsoft Store source, which asks to send the region first.
+    $common = @('--exact', '--source', 'winget', '--silent', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity')
     & winget @Arguments @common
     $code = $LASTEXITCODE
     # 0 = ok; 0x8A15002B = no applicable upgrade; 0x8A150061 = already installed
@@ -473,6 +474,16 @@ function Save-VendorInstaller($App) {
 
 # The manifest's SHA-256 decides whether an installer file is the right one, wherever it came from.
 function Assert-InstallerHash($App, [string]$Path) {
+    if ($App.Signer) {
+        # A file the vendor replaces at every release has no fixed SHA-256, so check that it's
+        # validly signed by the vendor instead.
+        $sig = Get-AuthenticodeSignature $Path
+        if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notlike "*O=$($App.Signer),*") {
+            throw "$(Split-Path -Leaf $Path) isn't validly signed by $($App.Signer) ($($sig.Status)). Delete it and download it again."
+        }
+        Write-Host "Signed by $($App.Signer)."
+        return
+    }
     $hash = (Get-FileHash $Path -Algorithm SHA256).Hash
     if (-not $App.Sha256) {
         Write-Host "No Sha256 in the manifest for $($App.Name). This file's is $hash" -ForegroundColor Yellow
@@ -492,6 +503,20 @@ function Show-UnclaimedInstallers {
         Write-Step "Installer files that no app in the manifest uses"
         $unclaimed | ForEach-Object { Write-Host " - $($_.FullName)" -ForegroundColor Yellow }
         Write-Host "Either an app's Installer pattern in manifest.psd1 needs changing, or the file isn't needed."
+    }
+}
+
+# Some installers hand over to Windows Installer and exit before it has finished. Windows Installer
+# holds this mutex while it's installing, so wait for it to be free (up to 30 minutes).
+function Wait-WindowsInstaller {
+    $deadline = (Get-Date).AddMinutes(30)
+    while ((Get-Date) -lt $deadline) {
+        $mutex = $null
+        try {
+            if (-not [Threading.Mutex]::TryOpenExisting('Global\_MSIExecute', [ref]$mutex)) { return }
+            $mutex.Dispose()
+        } catch [UnauthorizedAccessException] { }   # it exists but can't be opened: still busy
+        Start-Sleep -Seconds 5
     }
 }
 
@@ -522,7 +547,12 @@ function Install-VendorApp($App, $Status) {
     if (-not $App.Args -and $path -notlike '*.msi') {
         Write-Host "No silent arguments for $($App.Name): the installer will open. Click through it." -ForegroundColor Yellow
     }
-    $p = if ($argList) { Start-Process $exe -ArgumentList $argList -Wait -PassThru } else { Start-Process $exe -Wait -PassThru }
+    # Waits for the installer itself only. Start-Process -Wait would also wait for anything it starts,
+    # so an installer that opens its app at the end (Insta360, LCC) would hang here until the app closed.
+    $p = if ($argList) { Start-Process $exe -ArgumentList $argList -PassThru } else { Start-Process $exe -PassThru }
+    $null = $p.Handle   # needed to read ExitCode once it ends
+    $p.WaitForExit()
+    Wait-WindowsInstaller
     if ($p.ExitCode -eq 3010 -or $p.ExitCode -eq 1641) { $script:RebootNeeded = $true }
     elseif ($p.ExitCode -ne 0) { throw "$($App.Name) installer exited with $($p.ExitCode)" }
 }
@@ -566,6 +596,7 @@ function Install-UnityEditor($App, $Status) {
     # Unity Hub is a windowed program: PowerShell only waits for it when its output is piped.
     # Its install folder is a per-user setting; set it to the shared one that DetectPath expects.
     # Arguments go in arrays so PowerShell passes the leading '--' on to Unity Hub as it is.
+    New-Item -ItemType Directory -Force -Path 'C:\Program Files\Unity\Hub\Editor' | Out-Null   # Hub refuses a folder that isn't there
     $pathArgs = @('--', '--headless', 'install-path', '--set', 'C:\Program Files\Unity\Hub\Editor')
     & $hub @pathArgs | Out-Host
     $hubArgs = @('--', '--headless', 'install', '--version', $App.Version, '--changeset', $changeset)

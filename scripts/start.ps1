@@ -51,14 +51,15 @@ function Confirm-YesNo([string]$Question) {
 }
 
 # Runs provision.ps1 in this window and returns its exit code: 0 done, 3010 restart to carry on.
-function Invoke-Provision([hashtable]$Arguments = @{}) {
-    try {
-        & (Join-Path $PSScriptRoot 'provision.ps1') @Arguments | Out-Host
-        $LASTEXITCODE
-    } catch {
-        Write-Host "`nProvisioning stopped: $($_.Exception.Message)" -ForegroundColor Red
-        1
-    }
+# It runs as its own process writing straight to this window, so winget's progress bars draw
+# properly instead of coming out as garbled lines.
+function Invoke-Provision([string]$Name) {
+    $script = Join-Path $PSScriptRoot 'provision.ps1'
+    $p = Start-Process powershell.exe -NoNewWindow -PassThru `
+        -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$script`" -Machine $Name"
+    $null = $p.Handle   # needed to read ExitCode once it ends
+    $p.WaitForExit()    # just provision itself, not the apps installers leave running
+    $p.ExitCode
 }
 
 # True if another computer on the network already answers to this name (often the test VM).
@@ -148,7 +149,7 @@ function Invoke-Setup([string]$Name) {
     # Registered before anything else, so setup still carries on if something restarts the PC early.
     Register-CbrSignInTask -Name $continueTask -User $settings.AdminUser -Elevated `
         -Script $PSCommandPath -Arguments "-Action continue -Machine $Name"
-    Complete-Setup (Invoke-Provision @{ Machine = $Name }) $entry.ComputerName
+    Complete-Setup (Invoke-Provision $Name) $entry.ComputerName
 }
 
 function Resume-Setup([string]$Name) {
@@ -160,7 +161,7 @@ function Resume-Setup([string]$Name) {
         if ($LASTEXITCODE -ne 0) { Write-Host 'Couldn''t update the scripts; carrying on with this copy.' -ForegroundColor Yellow }
     }
     $entry = $manifest.Machines | Where-Object { $_.Name -eq $Name }
-    Complete-Setup (Invoke-Provision @{ Machine = $Name }) $entry.ComputerName
+    Complete-Setup (Invoke-Provision $Name) $entry.ComputerName
 }
 
 function Invoke-Update {

@@ -43,6 +43,8 @@
 #   DownloadPage  Where to fetch it by hand, shown when there's no file and no Url.
 #   Sha256    SHA-256 of the tested installer. Every file is checked against it before it runs;
 #             provisioning prints the hash of files that don't have one yet, to copy in here.
+#   Signer    Instead of Sha256, for a file the vendor replaces at every release (Chrome): the
+#             organisation its signature must be from, e.g. 'Google LLC'.
 #   Inner     Optional, for .zip/.iso: pattern for the installer inside, if there's more than one.
 #   Args      Silent-install arguments. $null = run the installer interactively and wait.
 
@@ -108,7 +110,10 @@
     Apps = @(
         # ---- Browsers, utilities: keep current -------------------------------------------
         @{ Name = 'Brave';           Method = 'winget'; Id = 'Brave.Brave';                 Policy = 'current'; Detect = 'Brave*' }
-        @{ Name = 'Chrome';          Method = 'winget'; Id = 'Google.Chrome';               Policy = 'current'; Detect = 'Google Chrome' }
+        # Google replaces this file at every release, so winget's recorded hash is often out of date and
+        # winget then refuses it. Taken straight from Google instead, and checked by Google's signature.
+        @{ Name = 'Chrome';          Method = 'installer'; Installer = 'googlechromestandaloneenterprise64*'; Signer = 'Google LLC'
+           Url = 'https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi'; Args = $null; Policy = 'current'; Detect = 'Google Chrome' }
         @{ Name = 'Firefox';         Method = 'winget'; Id = 'Mozilla.Firefox';             Policy = 'current'; Detect = 'Mozilla Firefox*' }
         @{ Name = 'Everything';      Method = 'winget'; Id = 'voidtools.Everything';        Policy = 'current'; Detect = 'Everything*' }
         @{ Name = 'Notepad++';       Method = 'winget'; Id = 'Notepad++.Notepad++';         Policy = 'current'; Detect = 'Notepad++*' }

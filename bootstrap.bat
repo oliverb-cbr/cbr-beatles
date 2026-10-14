@@ -71,7 +71,7 @@ if errorlevel 1 (
     exit /b 1
 )
 echo Installing Git...
-winget install --id Git.Git --exact --scope machine --silent --accept-source-agreements --accept-package-agreements
+winget install --id Git.Git --exact --source winget --scope machine --silent --accept-source-agreements --accept-package-agreements
 if not exist "%GIT%" (
     echo Git didn't install - see the messages above.
     pause
