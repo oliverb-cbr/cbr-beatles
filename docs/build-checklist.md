@@ -141,7 +141,10 @@ Restore-VMCheckpoint -VMName CBR-Test -Name 'clean base' -Confirm:$false
 ### Windows
 
 - [ ] **Unplug every external drive except the install USB.**
-- [ ] Boot from the stick. **The first time on each PC**, Ventoy shows a blue Secure Boot screen: follow its steps to enrol Ventoy's key (Enroll key from disk, then the `.cer` file on the stick), then restart. That's once per PC.
+- [ ] Boot from the stick. **The first time on each PC**, a blue screen says *Verification failed: (0x1A) Security Violation*. That's Ventoy asking you to trust its key, once per PC; leave Secure Boot on. With the arrow keys and Enter:
+  1. **OK**, then press a key straight away at *Press any key to perform MOK management* (missed it? restart and boot the stick again).
+  2. **Enroll key from disk** → **VTOYEFI** → **ENROLL_THIS_KEY_IN_MOKMANAGER.cer** → **Continue** → **Yes** → **Reboot**. If there's a second `.cer` file, enrol that too.
+  3. Boot the stick again: the Ventoy menu appears. If the blue screen keeps coming back, turn on "Allow Microsoft 3rd Party UEFI CA" in the firmware.
 - [ ] Pick the Windows ISO, and choose the CBR template when Ventoy asks.
 - [ ] When Setup asks for a disk, choose the internal SSD and delete its old partitions.
 - [ ] Sign in as `cbradmin` / `ChangeMe-CBR1`. Run **Check for updates** until nothing's left. Set the real `cbradmin` password when asked (use the same one on all four).

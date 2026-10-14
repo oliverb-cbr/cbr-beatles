@@ -28,7 +28,7 @@ Run `bootstrap.bat` on any Windows PC and choose **Make or refresh the install U
 
 To install: boot the stick, pick the Windows ISO, and choose the CBR template when Ventoy asks.
 
-**Secure Boot:** the first time the stick boots on each PC, Ventoy shows a blue screen asking you to enrol its key. Follow it (Enroll key from disk, then the `.cer` file on the stick), and restart. Once per PC. Some boards also need "Allow Microsoft 3rd Party UEFI CA" turned on in the firmware.
+**Secure Boot:** the first time the stick boots on each PC, a blue screen says *Verification failed: (0x1A) Security Violation*. It's Ventoy asking you to trust its key, once per PC; leave Secure Boot on. Choose **OK**, press a key at *Press any key to perform MOK management*, then **Enroll key from disk** → **VTOYEFI** → **ENROLL_THIS_KEY_IN_MOKMANAGER.cer** → **Continue** → **Yes** → **Reboot** (enrol any second `.cer` file the same way). A BIOS update or a Secure Boot key reset can clear it; it then just asks again. Some boards also need "Allow Microsoft 3rd Party UEFI CA" turned on in the firmware.
 
 ## In the Hyper-V test VM
 
