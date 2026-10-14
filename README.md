@@ -52,7 +52,7 @@ It finds and checks the Windows ISO itself (or asks you to pick it), then copies
 9. **Sign out and sign in as `CBR`.** Ubuntu, Docker and GPU support set themselves up in a window (10 to 20 minutes, once only). Leave it open.
 10. **Still as `CBR`, sign in** to Steam, Epic Games, Unity Hub and Meta Quest Developer Hub with the shared CBR accounts.
 
-No internet on a new PC? Windows may have no driver for its network port: unzip the motherboard maker's network driver into `cbr-deploy\drivers` on the stick and run the command again from the stick's `bootstrap.bat`.
+No internet on a new PC? Windows may have no driver for its network port: unzip the motherboard maker's network driver into `cbr-deploy\drivers` on the stick, then double-click `bootstrap.bat` on the stick (the one-line command needs internet to start). It installs the driver first.
 
 ## How it fits together
 
