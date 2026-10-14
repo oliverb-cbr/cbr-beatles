@@ -272,8 +272,9 @@ function Copy-ManualInstallers([string]$Root) {
     $apps = @($manifest.Apps | Where-Object { $_.Method -eq 'installer' -and -not $_.Url })
     $files = @(Get-ChildItem $settings.InstallerCache -File -ErrorAction SilentlyContinue |
         Where-Object { $name = $_.Name; $apps | Where-Object { $name -like $_.Installer } })
+    Write-Host "For: $(($apps | ForEach-Object Name) -join ', ') (downloaded by hand into $($settings.InstallerCache))"
     if (-not $files.Count) {
-        Write-Host "None in $($settings.InstallerCache) on this PC."
+        Write-Host "None in $($settings.InstallerCache) on this PC yet, so there's nothing to copy. That's fine."
         return
     }
     $dest = Join-Path $Root $settings.InstallerRoot
