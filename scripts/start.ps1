@@ -47,7 +47,7 @@ function Exit-AfterKey {
 }
 
 function Confirm-YesNo([string]$Question) {
-    (Read-Host "$Question (y/N)").Trim() -eq 'y'
+    (Read-Host "$Question (y/N)").Trim() -match '^(y|yes)$'
 }
 
 # Runs provision.ps1 in this window and returns its exit code: 0 done, 3010 restart to carry on.

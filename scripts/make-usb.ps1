@@ -91,15 +91,15 @@ function Select-Stick {
             $tag = $(if (Test-VentoyDisk $d) { '  [has Ventoy already]' } else { '' })
             Write-Host "  $(Get-DiskSummary $d)$tag"
         }
-        if ($sticks.Count -eq 1) {
-            if ((Read-Host "`nUse disk $($sticks[0].Number)? (y/N)").Trim() -eq 'y') { return $sticks[0] }
-            return $null
+        $numbers = ($sticks | ForEach-Object Number) -join ' or '
+        while ($true) {
+            $answer = (Read-Host "`nType the disk number of the stick to use ($numbers), or Q to quit").Trim().ToUpper()
+            if ($answer -eq 'Q') { return $null }
+            if ($answer -eq 'Y' -and $sticks.Count -eq 1) { return $sticks[0] }
+            $pick = $sticks | Where-Object { [string]$_.Number -eq $answer }
+            if ($pick) { return $pick }
+            Write-Host "That's not one of the disks listed." -ForegroundColor Yellow
         }
-        $n = (Read-Host "`nType the disk number of the stick to use (or Q to quit)").Trim()
-        if ($n.ToUpper() -eq 'Q') { return $null }
-        $pick = $sticks | Where-Object { [string]$_.Number -eq $n }
-        if ($pick) { return $pick }
-        Write-Host "That's not one of the disks listed." -ForegroundColor Yellow
     }
 }
 
@@ -175,7 +175,7 @@ function Get-IsoToCopy($Disk, [bool]$HasVentoy) {
         Write-Host "That isn't the ISO tested for the CBR build: its SHA-256 differs from the manifest." -ForegroundColor Yellow
         Write-Host 'Only use it to move the build to a new Windows release. Test it in the VM, then put its name'
         Write-Host "and SHA-256 ($hash) in Settings.WindowsIso in manifest.psd1."
-        if ((Read-Host 'Put it on the stick anyway? (y/N)').Trim() -ne 'y') { throw 'Stopped, so the stick was left as it was.' }
+        if ((Read-Host 'Put it on the stick anyway? (y/N)').Trim() -notmatch '^(y|yes)$') { throw 'Stopped, so the stick was left as it was.' }
     }
     [pscustomobject]@{ Path = $source; Sha256 = $hash }
 }
@@ -239,7 +239,7 @@ function Copy-WindowsIso([string]$Root, $Iso) {
     $others = @(Get-ChildItem $isoDir -Filter *.iso -File -ErrorAction SilentlyContinue | Where-Object Name -ne $keep)
     if ($others.Count) {
         Write-Host "Other ISOs in ISO\Windows11 on the stick: $(($others | ForEach-Object Name) -join ', ')"
-        if ((Read-Host 'Delete them, so the stick only offers the tested one? (Y/n)').Trim() -ne 'n') { $others | Remove-Item -Force }
+        if ((Read-Host 'Delete them, so the stick only offers the tested one? (Y/n)').Trim() -notmatch '^(n|no)$') { $others | Remove-Item -Force }
     }
 }
 
