@@ -54,7 +54,7 @@ Provisioning downloads almost every vendor installer itself from the links in th
 
 ### Accounts and keys
 
-- [ ] Shared CBR accounts, signed up with a CBR email address: Steam, Epic Games, Unity, Meta developer account.
+- [ ] A CBR Epic Games account, signed up with a CBR email address, for installing Unreal and RealityScan from the launcher if Epic's offline installers haven't arrived. Nothing else is shared: people sign in to Epic, Unity and Meta with their own accounts.
 - [ ] Any licences: Unity (Personal or Education), TouchDesigner (if commercial/educational keys).
 - [ ] An SSH key for `fleet.ps1`, made on your own PC:
   ```powershell
@@ -110,11 +110,11 @@ Hyper-V VMs can't boot from a USB stick, so the VM gets the ISO and a small seco
 ### Run the scripts
 
 1. In the VM, signed in as `cbradmin`, run the command above in PowerShell. Choose **Set up this PC**, then `JOHN`, and type `JOHN` to confirm.
-2. It asks for a password for the `CBR` staff account (twice), then installs everything. Click through the installers that open on their own.
+2. It asks for passwords for the `CBR` and `CBRSession` accounts (each twice), then installs everything. Click through the installers that open on their own.
 3. When it asks, press Enter to restart. Sign in as `cbradmin` again: setup carries on by itself in a window and says when it's finished.
-4. Sign out and sign in as `CBR`. The staff setup (Ubuntu, Docker, GPU support) starts by itself in a window.
+4. Sign out and sign in as `CBR`. The desktop has the app folders and a Work folder, and the *How to use this PC* note opens. Run **Code > Set up Ubuntu & Docker** from the desktop to test that too.
 
-**Expected to fail in the VM**, so ignore these: the NVIDIA driver (no NVIDIA GPU), Unreal and RealityScan (until Epic's offline installers are in `C:\CBR\installers`), and the final GPU check in the staff setup.
+**Expected to fail in the VM**, so ignore these: the NVIDIA driver (no NVIDIA GPU), Unreal and RealityScan (until Epic's offline installers are in `C:\CBR\installers`), and the final GPU check in the Ubuntu setup.
 
 **Everything else should work**: Windows settings, debloat, the WinGet apps and vendor installers, the Unity Editor (a long download through Unity Hub), WSL and Docker, and the audit.
 
@@ -156,10 +156,10 @@ Restore-VMCheckpoint -VMName CBR-Test -Name 'clean base' -Confirm:$false
 
 ### Set up
 
-- [ ] Run `bootstrap.bat` from the stick. Choose **Set up this PC**, then `JOHN`. Choose the `CBR` password and click through the installers that open on their own (Insta360, the three LCC tools, MQDH).
+- [ ] Run `bootstrap.bat` from the stick. Choose **Set up this PC**, then `JOHN`. Choose the `CBR` and `CBRSession` passwords and click through the installers that open on their own (Insta360, the three LCC tools, MQDH).
 - [ ] Restart when asked and sign in as `cbradmin`: setup carries on and says when it's done.
-- [ ] Sign out and sign in as `CBR`: the staff setup runs. It should finish by showing the RTX 5090 from inside a Docker container.
-- [ ] Still as `CBR`, sign in to Steam, Epic, Unity Hub and Meta Quest Developer Hub with the shared CBR accounts.
+- [ ] Sign out and sign in as `CBR`: the note opens, and the desktop has the app folders and Work.
+- [ ] Still as `CBR`, run **Code > Set up Ubuntu & Docker**. It should finish by showing the RTX 5090 from inside a Docker container.
 
 ### Unreal, RealityScan and Unity
 
@@ -172,6 +172,23 @@ Restore-VMCheckpoint -VMName CBR-Test -Name 'clean base' -Confirm:$false
 - [ ] Blender GPU render, TouchDesigner project, Unreal 5.6 project (including a C++ build), Unity build.
 - [ ] Insta360 stitch, LCC Studio and the LCC editors, VIVE Mars tracking, Quest through MQDH and SideQuest.
 - [ ] A PyTorch container using the GPU in WSL.
+
+### Test the accounts and lock-downs
+
+These are new and have only been checked on paper, so try each one on JOHN before building the others. Tell me what doesn't behave as described.
+
+- [ ] **Check this PC** shows OK for: Switch user hidden, Public folders read-only, Logs admin-only, Disk limits, OneDrive (personal accounts only), Defender exclusions, Nothing unexpected in the background, Unwanted programs absent, Desktop folders complete. For *Desktop folders complete*, send me any names it says are missing.
+- [ ] **Desktop folders:** as `CBR`, open each folder and start a few apps from it, including GitHub Desktop and Ubuntu. No loose app shortcuts on the desktop, apart from the note and Work.
+- [ ] **A test person:** `bootstrap.bat` → **Accounts** → **A**, username `test1`, end date tomorrow. Sign in as `test1` with the starter password: Windows asks for a new one, the note opens, a message gives the end date, and Work is on the desktop and in Explorer's sidebar.
+- [ ] **OneDrive:** as `test1`, OneDrive starts and accepts a Falmouth sign-in, and refuses a personal Microsoft account. A big file in OneDrive shows a cloud icon until it's opened. As `CBR`, OneDrive doesn't start and can't be opened.
+- [ ] **Lock-downs:** as `CBR`, saving a file into `C:\Users\Public\Documents` is refused, and opening `C:\CBR\logs` is refused.
+- [ ] **Disk limits:** as `cbradmin`, give `test1` a tiny allowance: `fsutil quota modify C: 1073741824 2147483648 test1` (1 GB warning, 2 GB limit). As `test1`, copy 1.5 GB into Work, sign out and in again: a message about disk space appears within a couple of minutes. Copying another 1 GB should fail. The Accounts table shows the space used.
+- [ ] **Background:** as `CBR`, Task Manager → Startup apps shows only Windows Security, Everything and Realtek audio as enabled (plus OneDrive for `test1`). Steam isn't installed.
+- [ ] **Audio:** with the Waves service off, headphones work in both the front and back sockets, and a mic works.
+- [ ] **NVIDIA App:** gone from Settings → Apps; the driver is still installed (Check this PC shows its version).
+- [ ] **Session reset:** sign in as `CBRSession`, sign in to a website, save a file in Work, sign out. **Accounts** → **S**. Sign in as `CBRSession` again: no file, no website sign-in, and the note opens as for a new account.
+- [ ] **Remove:** **Accounts** → **R** → `test1`. It disappears from the table and `C:\Users\test1` is gone.
+- [ ] **CSV:** **Accounts** → **C** saves a file in `C:\CBR\logs` that opens in Excel.
 
 ### Lock in versions
 
@@ -190,7 +207,7 @@ For each machine, follow phase 3 with its own name:
 
 - [ ] Firmware: same BIOS version and settings as JOHN.
 - [ ] Windows from the stick, then **Check for updates**.
-- [ ] `bootstrap.bat` from the stick → **Set up this PC** → its name. Restart when asked, sign in as `cbradmin`, then as `CBR`, and sign in to the shared accounts.
+- [ ] `bootstrap.bat` from the stick → **Set up this PC** → its name. Restart when asked, sign in as `cbradmin`, then check the desktop as `CBR`.
 - [ ] Unreal and RealityScan come off the stick if JOHN refreshed it with Epic's offline installers. Without those: either let the Epic launcher download Unreal (50+ GB), or copy it from JOHN, then in the Epic launcher choose Install and point it at the copied folder so it checks the files instead of downloading:
   ```powershell
   scp -r "cbradmin@CBR-JOHN:C:/Program Files/Epic Games/UE_5.6" "C:/Program Files/Epic Games/"
@@ -211,6 +228,8 @@ Every row should match across the four machines. Rows marked `<<` differ.
 
 ## Phase 5: After
 
+- [ ] **People**: add them with `bootstrap.bat` → **Accounts** on the PC they'll use. Every so often, `fleet.ps1 -Action Accounts` saves one CSV of every account on all four for the spreadsheet; remove accounts that have ended.
+- [ ] **After a session**: `fleet.ps1 -Action ResetSession` wipes `CBRSession` on all four (or **Accounts** → **S** at each PC).
 - [ ] **Remote updates**: once the repo is public, `fleet.ps1 -Action Update` works over SSH as it is. While it's private, add a read-only deploy key on GitHub (Settings → Deploy keys) and switch each machine's copy of the repo to `git@github.com:oliverb-cbr/cbr-beatles.git`; until then, updates have to be run at each machine, because updates over SSH can't use the browser sign-in `bootstrap.bat` saves.
 - [ ] **Routine**: every few weeks, run `fleet.ps1` to check for drift and `fleet.ps1 -Action Update` (or `bootstrap.bat` → **Update this PC** at each machine) to update apps. Windows updates itself.
 - [ ] **New version of a pinned app**: test it on JOHN, change `Version` in the manifest, commit, push, update the rest.

@@ -10,10 +10,12 @@
     .\fleet.ps1                       # audit all four, show a comparison grid
     .\fleet.ps1 -Action Update        # git pull + update.ps1 on each, one after another
     .\fleet.ps1 -Machine PAUL,RINGO   # only these
+    .\fleet.ps1 -Action Accounts     # every account on all four in one table, saved as a CSV
+    .\fleet.ps1 -Action ResetSession # reset the session account on all four (skips any in use)
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('Audit', 'Update')]
+    [ValidateSet('Audit', 'Update', 'Accounts', 'ResetSession')]
     [string]$Action = 'Audit',
     [string[]]$Machine
 )
@@ -30,6 +32,30 @@ function Invoke-Remote($Target, [string]$Script, [string]$ScriptArgs = '') {
     $path = Join-Path $settings.RepoPath "scripts\$Script"
     $cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File `"$path`" $ScriptArgs"
     & ssh -o ConnectTimeout=10 "$($settings.AdminUser)@$($Target.Address)" $cmd
+}
+
+if ($Action -eq 'Accounts') {
+    $all = foreach ($t in $targets) {
+        try {
+            $rows = (Invoke-Remote $t 'accounts.ps1' '-AsJson') -join "`n" | ConvertFrom-Json
+            foreach ($r in @($rows)) { $r | Add-Member -NotePropertyName PC -NotePropertyValue $t.Name -PassThru }
+        } catch { Write-Warning "$($t.Name): $($_.Exception.Message)" }
+    }
+    $all | Format-Table PC, Account, Name, Type, Created, LastSignIn, Ends, UsedGB, LimitGB, SignedIn, Ubuntu -AutoSize
+    $dir = $(if (Test-Path 'C:\CBR\logs') { 'C:\CBR\logs' } else { (Get-Location).Path })
+    $file = Join-Path $dir ('accounts-all-{0:yyyyMMdd-HHmm}.csv' -f (Get-Date))
+    $all | Select-Object PC, Account, Name, Type, Created, LastSignIn, DaysSince, Ends, Expired, Enabled,
+        UsedGB, LimitGB, OverWarning, SignedIn, Ubuntu | Export-Csv $file -NoTypeInformation
+    Write-Host "Saved: $file"
+    return
+}
+
+if ($Action -eq 'ResetSession') {
+    foreach ($t in $targets) {
+        Write-Step "Resetting the session account on $($t.Name)"
+        Invoke-Remote $t 'accounts.ps1' '-ResetSession -NoPrompt'
+    }
+    return
 }
 
 if ($Action -eq 'Update') {

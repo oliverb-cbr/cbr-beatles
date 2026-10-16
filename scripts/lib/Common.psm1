@@ -119,22 +119,90 @@ function Get-AppStatus($App) {
     }
 }
 
-# Written by user-setup.ps1 once the staff account's WSL and Docker are set up. Staff can create
-# files in C:\ProgramData, and everyone can read it, so the admin side and the audit can see it.
-function Get-StaffSetupMarker { 'C:\ProgramData\CBR\staff-setup-done.txt' }
+# Written by user-setup.ps1 once a person's Ubuntu and Docker are set up. Everyone can create files
+# in C:\ProgramData and read them, so the admin side and the audit can see it.
+function Get-UbuntuMarker([string]$User = $env:USERNAME) { "C:\ProgramData\CBR\ubuntu\$User.txt" }
+
+# Where the "How to use this PC" note and the shortcuts go, for every account.
+function Get-PublicDesktop { 'C:\Users\Public\Desktop' }
+function Get-CbrStartMenu { 'C:\ProgramData\Microsoft\Windows\Start Menu\Programs\CBR' }
+function Get-NotePath { Join-Path (Get-PublicDesktop) 'How to use this PC.html' }
+
+# admin, shared (CBR), session (CBRSession) or personal.
+function Get-CbrAccountType([string]$Name, $Settings) {
+    if ($Name -eq $Settings.SharedUser) { return 'shared' }
+    if ($Name -eq $Settings.SessionUser) { return 'session' }
+    $admins = @(Get-LocalGroupMember -Group 'Administrators' -ErrorAction SilentlyContinue | ForEach-Object { ($_.Name -split '\\')[-1] })
+    if ($admins -contains $Name) { return 'admin' }
+    'personal'
+}
+
+# Accounts that are part of Windows itself, not people: Administrator, Guest, DefaultAccount,
+# WDAGUtilityAccount (identified by the end of their SID, which doesn't depend on the language).
+function Test-BuiltInAccount($LocalUser) { $LocalUser.SID.Value -match '-(500|501|503|504)$' }
+
+# Asks twice, so a typo doesn't lock anyone out.
+function Read-NewPassword([string]$For) {
+    while ($true) {
+        $first = Read-Host "Password for $For" -AsSecureString
+        $second = Read-Host 'Type it again' -AsSecureString
+        $a = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($first)
+        $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($second)
+        try {
+            $plainA = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($a)
+            $same = $plainA -ceq [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b)
+            $empty = -not $plainA
+        } finally {
+            [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($a)
+            [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b)
+        }
+        if ($empty) { Write-Host "It can't be blank." -ForegroundColor Yellow }
+        elseif (-not $same) { Write-Host "Those didn't match. Try again." -ForegroundColor Yellow }
+        else { return $first }
+    }
+}
+
+function New-CbrShortcut([string]$Path, [string]$Target, [string]$Arguments, [string]$Icon,
+                         [string]$WorkingDirectory, [int]$WindowStyle = 1) {
+    New-Item -ItemType Directory -Force -Path (Split-Path $Path) | Out-Null
+    $link = (New-Object -ComObject WScript.Shell).CreateShortcut($Path)
+    $link.TargetPath = $Target
+    if ($Arguments) { $link.Arguments = $Arguments }
+    if ($Icon) { $link.IconLocation = $Icon }
+    if ($WorkingDirectory) { $link.WorkingDirectory = $WorkingDirectory }
+    $link.WindowStyle = $WindowStyle   # 1 normal, 7 minimised
+    $link.Save()
+}
+
+# Disk use per account on C:, from Windows' disk quotas: name -> @{ Used; Warn; Limit } in bytes.
+# Instant, because Windows keeps the totals as files change. Needs admin.
+function Get-QuotaUsage {
+    $usage = @{}
+    foreach ($q in Get-CimInstance Win32_DiskQuota -ErrorAction SilentlyContinue) {
+        if ($q.QuotaVolume.DeviceID -ne 'C:') { continue }
+        $usage[$q.User.Name] = @{ Used = [uint64]$q.DiskSpaceUsed; Warn = [uint64]$q.WarningLimit; Limit = [uint64]$q.Limit }
+    }
+    $usage
+}
 
 # A task that runs a script from this repo each time $User signs in, in a window on their desktop.
 # No password is stored: it only runs while they're signed in. -Elevated runs it as admin without
-# a prompt (for the admin account); -Hidden starts it without a window.
+# a prompt (for the admin account); -Hidden starts it without a window. -AllUsers runs it for
+# whoever signs in, as that person.
 function Register-CbrSignInTask([string]$Name, [string]$User, [string]$Script, [string]$Arguments,
-                                [switch]$Elevated, [switch]$Hidden) {
+                                [switch]$Elevated, [switch]$Hidden, [switch]$AllUsers) {
     $style = $(if ($Hidden) { '-WindowStyle Hidden ' } else { '' })
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
         -Argument "-NoProfile -ExecutionPolicy Bypass $style-File `"$Script`" $Arguments"
-    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $User
-    $trigger.Delay = 'PT20S'   # let the desktop and network settle first
     $level = $(if ($Elevated) { 'Highest' } else { 'Limited' })
-    $principal = New-ScheduledTaskPrincipal -UserId $User -LogonType Interactive -RunLevel $level
+    if ($AllUsers) {
+        $trigger = New-ScheduledTaskTrigger -AtLogOn
+        $principal = New-ScheduledTaskPrincipal -GroupId 'BUILTIN\Users' -RunLevel $level
+    } else {
+        $trigger = New-ScheduledTaskTrigger -AtLogOn -User $User
+        $principal = New-ScheduledTaskPrincipal -UserId $User -LogonType Interactive -RunLevel $level
+    }
+    $trigger.Delay = 'PT20S'   # let the desktop and network settle first
     $options = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
         -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
     Register-ScheduledTask -TaskName $Name -Action $action -Trigger $trigger -Principal $principal `

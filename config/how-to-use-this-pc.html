@@ -1,0 +1,114 @@
+<!doctype html>
+<!-- Template for the "How to use this PC" note. provision.ps1 fills in the words in double curly
+     brackets (the PC's name, the desktop folders and the date) and puts it on the shared desktop on
+     every run, so edit it here, not on a PC. -->
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How to use this PC</title>
+<style>
+  :root { --bg: #ffffff; --fg: #1d1d1f; --muted: #5f6368; --accent: #0b57d0; --box: #f1f4f9; --warn: #fff4e5; --line: #dadce0; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #17181a; --fg: #e8eaed; --muted: #a8adb3; --accent: #8ab4f8; --box: #23262b; --warn: #3a2e1c; --line: #3c4043; }
+  }
+  body { background: var(--bg); color: var(--fg); font: 17px/1.55 "Segoe UI", system-ui, sans-serif; margin: 0; }
+  main { max-width: 46rem; margin: 0 auto; padding: 2rem 1.25rem 3rem; }
+  h1 { font-size: 1.9rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.2rem; margin: 2rem 0 .5rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+  p, li { margin: .35rem 0; }
+  ul, ol { padding-left: 1.4rem; }
+  .lead { color: var(--muted); margin-bottom: 1.25rem; }
+  .box { background: var(--box); border-radius: 10px; padding: .9rem 1.1rem; margin: 1rem 0; }
+  .first { background: var(--warn); }
+  kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 .3rem; font: .9em "Segoe UI", sans-serif; }
+  a { color: var(--accent); }
+  footer { color: var(--muted); font-size: .85rem; margin-top: 2.5rem; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>How to use this PC</h1>
+<p class="lead">This is <strong>{{COMPUTER}}</strong>, one of four identical workstations in the CBR Facility: JOHN, PAUL, GEORGE and RINGO.
+They have the same apps at the same versions, so a project that opens on one opens on the others.</p>
+
+<div class="box first">
+  <p><strong>First: this PC isn't backed up.</strong> Keep a copy of anything that matters somewhere else, and copy your work off at the end of every session.</p>
+</div>
+
+<div class="box">
+  <p><strong>Signed in as CBR Session?</strong> This account is wiped clean after each session: files, browser history and app sign-ins.
+  Save anything you want to keep to your own drive or OneDrive before you leave.</p>
+</div>
+
+<h2>Where to keep your work</h2>
+<ul>
+  <li><strong>While you're working:</strong> the <strong>Work</strong> folder on your desktop. It's on this PC's fast drive, which Unreal, Unity, RealityScan and LCC need.</li>
+  <li><strong>Documents, renders and exports:</strong> your university OneDrive. With your own account on this PC, the OneDrive app is there: sign in with your university email.
+    Files only download when you open them, so they don't fill the drive. On the shared accounts, use <a href="https://www.office.com">OneDrive in the browser</a>.</li>
+  <li><strong>Big projects</strong> (engine projects, scans, 360 footage): your own external SSD, copied at the end of each session.</li>
+  <li><strong>Code and engine projects:</strong> GitHub (with Git LFS for big files) or Unity Version Control, so you have the history as well as a copy.</li>
+</ul>
+
+<h2>Finding the apps</h2>
+<p>Everything is in the folders on the desktop, and under <strong>CBR</strong> in the Start menu:</p>
+<ul>
+{{FOLDERS}}
+</ul>
+
+<h2>Signing in to apps</h2>
+<ul>
+  <li>Sign in to Epic Games, Unity Hub and Meta Quest Developer Hub with <strong>your own accounts</strong>. Epic and Unity are free: sign up with your university email.</li>
+  <li>Don't let browsers save your passwords.</li>
+  <li>Sign out of anything personal before you leave. Someone else uses this PC next.</li>
+</ul>
+
+<h2>What you can't change, and why</h2>
+<p>You can't install software, change drivers or change system settings. That keeps all four PCs the same, so your work runs on any of them.</p>
+<ul>
+  <li><strong>Need an app, or a different version?</strong> Ask the CBR Tech team (below). It goes on all four PCs.</li>
+  <li><strong>Plugins inside your project are fine:</strong> Unreal or Unity plugins, Blender add-ons, Python packages installed with <code>uv</code>.</li>
+  <li><strong>Please don't update the NVIDIA driver, Unreal or Unity yourself.</strong> Their versions are fixed so projects don't break.</li>
+</ul>
+
+<h2>Disk space</h2>
+<p>Each account has a limit on this PC. You'll get a message when you're getting close: copy finished work off and delete it here, so you don't run out in the middle of saving something.</p>
+
+<h2>Heavy jobs</h2>
+<ul>
+  <li>This PC has an <strong>RTX 5090</strong> with 32 GB of graphics memory: big renders, simulations and AI work are what it's for.</li>
+  <li><strong>Running something overnight?</strong> Book it with the CBR Tech team and leave a note on the screen. Lock the PC (<kbd>Windows</kbd> + <kbd>L</kbd>) rather than signing out: signing out stops your job.
+    Only you can unlock it, so please don't lock it and leave unless it's booked.</li>
+  <li><strong>AI and Linux work:</strong> the first time, run <strong>Code &gt; Set up Ubuntu &amp; Docker</strong> (about 15 minutes, once). After that, open <strong>Code &gt; Ubuntu</strong>.
+    Docker can use the GPU: <code>docker run --gpus all …</code></li>
+</ul>
+
+<h2>Headsets, scanners and cameras</h2>
+<ul>
+  <li><strong>Meta Quest:</strong> plug in by USB-C, then use Meta Quest Developer Hub or SideQuest.</li>
+  <li><strong>XGRIDS scans:</strong> process them in LCC Studio; LCC Editor and LCC Model Editor are in the same folder.</li>
+  <li><strong>Insta360 footage:</strong> import and edit in Insta360 Studio.</li>
+  <li><strong>VIVE Mars and other kit:</strong> ask the CBR Tech team.</li>
+</ul>
+
+<h2>When you've finished</h2>
+<ol>
+  <li>Copy your work off this PC.</li>
+  <li>Close your apps. Unsaved work is lost when you sign out.</li>
+  <li>Sign out of personal accounts in browsers and apps.</li>
+  <li>Sign out of Windows: Start &gt; your name &gt; Sign out. Please don't shut down: the PCs update themselves.</li>
+</ol>
+
+<h2>Help</h2>
+<p>Restarting the app, then the PC, fixes a lot. You only lose unsaved work.</p>
+<p>Still stuck, need an app, or new to the CBR Facility? Email <a href="mailto:cbr@falmouth.ac.uk">cbr@falmouth.ac.uk</a>,
+or speak to the <strong>CBR Tech team in the CBR Facility, on the ground floor of Launchpad</strong>.
+For a problem, tell us three things: this PC's name (<strong>{{COMPUTER}}</strong>), what you were doing, and a screenshot of any error
+(<kbd>Windows</kbd> + <kbd>Shift</kbd> + <kbd>S</kbd>).</p>
+
+<footer>Updated {{UPDATED}}. This note is made by the CBR workstation scripts; changes to it go through the CBR Tech team.</footer>
+
+</main>
+</body>
+</html>

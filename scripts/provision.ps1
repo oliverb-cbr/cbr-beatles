@@ -85,13 +85,15 @@ function Set-PrivacyPolicies {
     # (MicrosoftWindows.Client.WebExperience) is removed via RemoveAppx anyway, so this is a bonus.
     try { Set-RegistryValue 'HKLM:\SOFTWARE\Policies\Microsoft\Dsh' 'AllowNewsAndInterests' 0 }
     catch { Write-Host 'Windows blocked the Widgets policy; relying on removing the Widgets app instead.' }
+    Set-RegistryValue 'HKLM:\SOFTWARE\Policies\Microsoft\VisualStudio\SQM' 'OptIn' 0   # Visual Studio usage reporting
     # Also set by the answer file; repeated here for machines installed without it.
     Set-RegistryValue 'HKLM:\SYSTEM\CurrentControlSet\Control\BitLocker' 'PreventDeviceEncryption' 1
 }
 
 # Explorer, Start and suggestion settings that only exist per user. $Root is a registry path
-# to the top of a user's hive, e.g. 'HKCU:' or 'Registry::HKEY_USERS\CBR_DEFAULT'.
-function Set-UserSettings([string]$Root) {
+# to the top of a user's hive, e.g. 'HKCU:' or 'Registry::HKEY_USERS\CBR_DEFAULT'. $Shared is for
+# the two shared accounts, which don't get OneDrive.
+function Set-UserSettings([string]$Root, [bool]$Shared = $false) {
     $cv = "$Root\Software\Microsoft\Windows\CurrentVersion"
     Set-RegistryValue "$cv\Explorer\Advanced" 'HideFileExt' 0                    # show file extensions
     Set-RegistryValue "$cv\Explorer\Advanced" 'Start_IrisRecommendations' 0      # no Start menu promotions
@@ -104,49 +106,33 @@ function Set-UserSettings([string]$Root) {
                    'SubscribedContent-338389Enabled', 'SubscribedContent-353694Enabled', 'SubscribedContent-353696Enabled') {
         Set-RegistryValue $cdm $v 0
     }
-    Remove-ItemProperty "$cv\Run" -Name 'OneDriveSetup' -ErrorAction SilentlyContinue
-}
+    Remove-ItemProperty "$cv\Run" -Name 'OneDriveSetup' -ErrorAction SilentlyContinue   # per-account OneDrive; it's installed for the PC instead
 
-# OneDrive comes either per machine (Program Files) or per account (installed at each account's
-# first sign-in, which Set-UserSettings stops for new accounts). winget's uninstall fails on some
-# builds (0x8004069B), so this stops OneDrive and runs each copy's own uninstaller instead.
-# The policy is what matters most: it stops OneDrive running or syncing for anyone, even if a copy
-# is left behind.
-function Remove-OneDrive {
-    Set-RegistryValue 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive' 'DisableFileSyncNGSC' 1
-    $keys = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
-            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
-            'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
-    $entries = @(Get-ItemProperty $keys -ErrorAction SilentlyContinue |
-        Where-Object { $_.DisplayName -like 'Microsoft OneDrive*' -and $_.UninstallString })
-    if (-not $entries.Count) { Write-Host 'Not installed.'; return }
-
-    Get-Process OneDrive, FileCoAuth -ErrorAction SilentlyContinue | Stop-Process -Force
-    foreach ($e in $entries) {
-        # e.g. "C:\...\OneDriveSetup.exe" /uninstall /allusers
-        if ($e.UninstallString -notmatch '^\s*"([^"]+)"\s*(.*)$' -and $e.UninstallString -notmatch '^\s*(\S+)\s*(.*)$') { continue }
-        $exe = $Matches[1]
-        $uninstallArgs = $Matches[2]
-        if ($uninstallArgs -notmatch '/silent') { $uninstallArgs += ' /silent' }
-        Write-Host "Uninstalling $($e.DisplayName): $exe $uninstallArgs"
-        if (Test-Path $exe) { Start-Process $exe -ArgumentList $uninstallArgs -Wait }
+    # Edge's "startup boost" entries (the Edge policy stops new ones).
+    $run = Get-Item "$cv\Run" -ErrorAction SilentlyContinue
+    if ($run) {
+        foreach ($value in $run.GetValueNames()) {
+            if ($value -like 'MicrosoftEdgeAutoLaunch_*') { Remove-ItemProperty "$cv\Run" -Name $value }
+        }
     }
-    Reset-InstalledProgramsCache
-    $left = @(Get-InstalledPrograms | Where-Object { $_.DisplayName -like 'Microsoft OneDrive*' })
-    if ($left.Count) {
-        Write-Host "OneDrive is still installed, but the policy stops it running. This step tries again next time." -ForegroundColor Yellow
-    } else {
-        Write-Host 'Removed.'
+    # Apps that add themselves to start at sign-in stay off: this is Task Manager's Startup apps switch,
+    # which keeps working when the app adds itself again.
+    $off = @($settings.StartupOff)
+    if ($Shared) { $off += 'OneDrive' }
+    foreach ($name in $off) {
+        Set-RegistryValue "$cv\Explorer\StartupApproved\Run" $name ([byte[]](3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)) 'Binary'
     }
+    # OneDrive: university accounts only, never personal Microsoft accounts.
+    Set-RegistryValue "$Root\Software\Policies\Microsoft\OneDrive" 'DisablePersonalSync' 1
 }
 
 # Runs Set-UserSettings against a hive file that isn't loaded (a signed-out user, or the Default
 # profile that new accounts are copied from).
-function Set-UserSettingsInHiveFile([string]$HiveFile) {
+function Set-UserSettingsInHiveFile([string]$HiveFile, [bool]$Shared = $false) {
     $mount = 'CBR_HIVE'
     & reg.exe load "HKU\$mount" $HiveFile | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Couldn't load $HiveFile" }
-    try { Set-UserSettings "Registry::HKEY_USERS\$mount" }
+    try { Set-UserSettings "Registry::HKEY_USERS\$mount" $Shared }
     finally {
         # Registry handles from the provider must be released before the hive can unload.
         [gc]::Collect(); [gc]::WaitForPendingFinalizers()
@@ -154,24 +140,27 @@ function Set-UserSettingsInHiveFile([string]$HiveFile) {
     }
 }
 
+# The Default profile (new accounts are copied from it), then every account that has signed in,
+# whether it's signed in now (its hive is loaded) or not.
 function Set-AllUserSettings {
     try {
         Set-UserSettingsInHiveFile 'C:\Users\Default\NTUSER.DAT'
         Write-Host 'Default profile (applies to accounts that sign in for the first time).'
     } catch { $failures.Add("Default profile settings: $($_.Exception.Message)") }
 
-    $shared = Get-LocalUser -Name $settings.SharedUser -ErrorAction SilentlyContinue
-    if ($shared) {
-        $userProfile = Get-CimInstance Win32_UserProfile | Where-Object { $_.SID -eq $shared.SID.Value }
+    $sharedNames = @($settings.SharedUser, $settings.SessionUser)
+    foreach ($user in Get-LocalUser) {
+        if (Test-BuiltInAccount $user) { continue }
+        $userProfile = Get-CimInstance Win32_UserProfile -Filter "SID='$($user.SID.Value)'"
+        if (-not $userProfile) { continue }   # never signed in: the Default profile covers it
+        $isShared = $sharedNames -contains $user.Name
         try {
-            if (-not $userProfile) { Write-Host "$($settings.SharedUser) hasn't signed in yet; the Default profile covers it." }
-            elseif ($userProfile.Loaded) { Set-UserSettings "Registry::HKEY_USERS\$($shared.SID.Value)"; Write-Host "$($settings.SharedUser) (signed in)." }
-            else { Set-UserSettingsInHiveFile (Join-Path $userProfile.LocalPath 'NTUSER.DAT'); Write-Host "$($settings.SharedUser)." }
-        } catch { $failures.Add("$($settings.SharedUser) settings: $($_.Exception.Message)") }
+            if ($userProfile.Loaded) { Set-UserSettings "Registry::HKEY_USERS\$($user.SID.Value)" $isShared }
+            else { Set-UserSettingsInHiveFile (Join-Path $userProfile.LocalPath 'NTUSER.DAT') $isShared }
+            Write-Host "$($user.Name)."
+        } catch { $failures.Add("$($user.Name) settings: $($_.Exception.Message)") }
     }
-
-    Set-UserSettings 'HKCU:'
-    Write-Host "$env:USERNAME (this account). Sign out and back in to see Explorer changes."
+    Write-Host 'Sign out and back in to see Explorer changes.'
 }
 
 function Set-RegionalSettings {
@@ -188,28 +177,257 @@ function Set-RegionalSettings {
     Write-Host "$($settings.TimeZone), $($settings.Locale) formats and keyboard."
 }
 
-# Runs one Windows setting step. A failure is reported and recorded, and the next step still runs.
-# Asks twice, so a typo doesn't lock staff out of the shared account.
-function Read-NewPassword([string]$For) {
-    while ($true) {
-        $first = Read-Host "Password for $For" -AsSecureString
-        $second = Read-Host 'Type it again' -AsSecureString
-        $a = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($first)
-        $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($second)
-        try {
-            $plainA = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($a)
-            $same = $plainA -ceq [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b)
-            $empty = -not $plainA
-        } finally {
-            [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($a)
-            [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b)
+# OneDrive is installed for the whole PC (see the manifest). These keep it to Falmouth's Microsoft 365,
+# with files downloaded only when opened, and stop it offering to move people's Desktop and Documents.
+function Set-OneDrivePolicies {
+    # Builds before October 2026 blocked OneDrive completely; undo that.
+    Remove-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive' -Name 'DisableFileSyncNGSC' -ErrorAction SilentlyContinue
+    $od = 'HKLM:\SOFTWARE\Policies\Microsoft\OneDrive'
+    Set-RegistryValue $od 'FilesOnDemandEnabled' 1
+    Set-RegistryValue $od 'KFMBlockOptIn' 1
+    Set-RegistryValue "$od\AllowTenantList" $settings.OneDriveTenantId $settings.OneDriveTenantId 'String'
+    # Storage Sense makes OneDrive files that haven't been opened for a while online-only again. When
+    # it's on, Windows also empties anything left in the Recycle Bin for over 30 days.
+    $ss = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\StorageSense'
+    Set-RegistryValue $ss 'AllowStorageSenseGlobal' 1
+    Set-RegistryValue $ss 'ConfigStorageSenseGlobalCadence' 1   # daily
+    Set-RegistryValue $ss 'ConfigStorageSenseCloudContentDehydrationThreshold' $settings.OneDriveDehydrateDays
+    Write-Host "Falmouth accounts only; files online-only until opened, and again after $($settings.OneDriveDehydrateDays) days unopened."
+}
+
+function Set-BrowserPolicies {
+    # Edge: no "startup boost" at sign-in, no running after it's closed, and no first-run screens
+    # (the "How to use this PC" note may open in it).
+    $edge = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
+    Set-RegistryValue $edge 'StartupBoostEnabled' 0
+    Set-RegistryValue $edge 'BackgroundModeEnabled' 0
+    Set-RegistryValue $edge 'HideFirstRunExperience' 1
+    # Chrome and Brave: don't keep running after the last window closes.
+    Set-RegistryValue 'HKLM:\SOFTWARE\Policies\Google\Chrome' 'BackgroundModeEnabled' 0
+    Set-RegistryValue 'HKLM:\SOFTWARE\Policies\BraveSoftware\Brave' 'BackgroundModeEnabled' 0
+    # Firefox: no Default Browser Agent, which reports to Mozilla which browser is the default.
+    Set-RegistryValue 'HKLM:\SOFTWARE\Policies\Mozilla\Firefox' 'DisableDefaultBrowserAgent' 1
+}
+
+# Public Documents, Downloads, Music, Pictures and Videos: readable by everyone, writable only by
+# admins, so they can't be used to pass files between people or as a dumping ground. (The Public
+# Desktop is admin-only already; provisioning manages what's on it.)
+function Lock-PublicFolders {
+    foreach ($name in 'Documents', 'Downloads', 'Music', 'Pictures', 'Videos') {
+        $dir = Join-Path 'C:\Users\Public' $name
+        if (-not (Test-Path $dir)) { continue }
+        & icacls $dir /inheritance:r /grant:r 'Administrators:(OI)(CI)F' 'SYSTEM:(OI)(CI)F' 'Users:(OI)(CI)RX' /Q | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Couldn't set permissions on $dir (icacls exit $LASTEXITCODE)" }
+        if (Get-ChildItem $dir -Force -ErrorAction SilentlyContinue) { & icacls "$dir\*" /reset /T /C /Q | Out-Null }
+    }
+    Write-Host 'Read-only for everyone except admins.'
+}
+
+# Per-account disk limits on C: (Settings.Quotas). Windows refuses writes past the limit; the
+# sign-in check (usage-check.ps1) tells people when they pass the warning level.
+function Set-DiskQuotas {
+    $gb = [int64]1GB
+    $q = $settings.Quotas
+    $qs = @(Get-CimInstance Win32_QuotaSetting | Where-Object { $_.VolumePath -like 'C:*' })[0]
+    if (-not $qs) { throw "Windows has no disk quota settings for C:." }
+    $state = $(if ($settings.QuotaMode -eq 'Enforce') { 2 } else { 1 })
+    # The defaults apply to every account not listed below, which means personal ones.
+    Set-CimInstance -InputObject $qs -Property @{
+        State                       = [uint32]$state
+        DefaultWarningLimit         = [int64]$q.Personal.Warn * $gb
+        DefaultLimit                = [int64]$q.Personal.Limit * $gb
+        WarningExceededNotification = $true
+        ExceededNotification        = $true
+    }
+    $none = [int64]16384 * $gb   # far beyond the drive: no limit
+    $limits = [ordered]@{}
+    foreach ($name in 'NT AUTHORITY\SYSTEM', 'NT SERVICE\TrustedInstaller', 'NT AUTHORITY\LOCAL SERVICE',
+                      'NT AUTHORITY\NETWORK SERVICE', 'BUILTIN\Administrators', $settings.AdminUser) {
+        $limits[$name] = @($none, $none)
+    }
+    $limits[$settings.SharedUser]  = @(([int64]$q.Shared.Warn * $gb), ([int64]$q.Shared.Limit * $gb))
+    $limits[$settings.SessionUser] = @(([int64]$q.Session.Warn * $gb), ([int64]$q.Session.Limit * $gb))
+    foreach ($user in Get-LocalUser) {
+        if ((Test-BuiltInAccount $user) -or $limits.Contains($user.Name)) { continue }
+        if ((Get-CbrAccountType $user.Name $settings) -eq 'admin') { $limits[$user.Name] = @($none, $none) }
+        else { $limits[$user.Name] = @(([int64]$q.Personal.Warn * $gb), ([int64]$q.Personal.Limit * $gb)) }
+    }
+    foreach ($name in $limits.Keys) {
+        & fsutil quota modify C: $limits[$name][0] $limits[$name][1] $name | Out-Null
+        if ($LASTEXITCODE -ne 0) { Write-Host "Couldn't set the limit for $name (fsutil exit $LASTEXITCODE)." -ForegroundColor Yellow }
+    }
+    $mode = $(if ($state -eq 2) { 'enforced' } else { 'tracked only, not enforced' })
+    Write-Host "Limits $mode. Personal accounts: warning at $($q.Personal.Warn) GB, limit $($q.Personal.Limit) GB."
+}
+
+function Set-DefenderExclusions {
+    $current = @((Get-MpPreference).ExclusionPath)
+    foreach ($path in $settings.DefenderExclusions) {
+        if ($current -notcontains $path) { Add-MpPreference -ExclusionPath $path; Write-Host "Excluded $path" }
+    }
+    Write-Host "$(@($settings.DefenderExclusions).Count) folders aren't scanned as they're written (see the README)."
+}
+
+# Startup entries made for every account (HKLM Run) that stay off, and scheduled tasks to turn off.
+# Per-account startup entries are switched off with the other per-user settings.
+function Set-BackgroundOff {
+    $off = [byte[]](3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    foreach ($name in $settings.StartupOff) {
+        foreach ($key in 'Run', 'Run32') {
+            Set-RegistryValue "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\$key" $name $off 'Binary'
         }
-        if ($empty) { Write-Host "It can't be blank." -ForegroundColor Yellow }
-        elseif (-not $same) { Write-Host "Those didn't match. Try again." -ForegroundColor Yellow }
-        else { return $first }
+    }
+    Write-Host "Kept off at sign-in: $($settings.StartupOff -join ', ')."
+    foreach ($task in Get-ScheduledTask) {
+        $full = $task.TaskPath + $task.TaskName
+        if (-not @($settings.TasksOff | Where-Object { $full -like $_ }).Count -or $task.State -eq 'Disabled') { continue }
+        Disable-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath | Out-Null
+        Write-Host "Turned off the scheduled task $full"
     }
 }
 
+# Uninstalls programs that installers add and the build doesn't want (Settings.Unwanted).
+function Remove-UnwantedPrograms {
+    $keys = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    $removed = 0
+    foreach ($unwanted in $settings.Unwanted) {
+        $entries = @(Get-ItemProperty $keys -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -like $unwanted.DisplayName -and $_.UninstallString })
+        foreach ($entry in $entries) {
+            Write-Host "Uninstalling $($entry.DisplayName)..."
+            $p = Start-Process cmd.exe -ArgumentList "/s /c `"$($entry.UninstallString) $($unwanted.SilentArgs)`"" -WindowStyle Hidden -PassThru
+            $null = $p.Handle
+            if (-not $p.WaitForExit(300000)) { Write-Host 'Its uninstaller is still running after 5 minutes; carrying on.' -ForegroundColor Yellow }
+            $removed++
+        }
+    }
+    Reset-InstalledProgramsCache
+    $left = @(foreach ($unwanted in $settings.Unwanted) {
+        Get-ItemProperty $keys -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like $unwanted.DisplayName } })
+    if ($left.Count) { throw "Couldn't remove $(($left.DisplayName | Sort-Object -Unique) -join ', ') silently. Uninstall it in Settings > Apps > Installed apps." }
+    if (-not $removed) { Write-Host 'None found.' }
+}
+
+# The shared accounts can't start OneDrive at all, so nobody leaves their university files signed
+# in for the next person. (Their startup entry for it is off too, with the per-user settings.)
+function Block-OneDriveForSharedAccounts {
+    $dir = @(Get-Item 'C:\Program Files*\Microsoft OneDrive' -ErrorAction SilentlyContinue)[0]
+    if (-not $dir) { Write-Host "OneDrive isn't installed yet."; return }
+    foreach ($name in $settings.SharedUser, $settings.SessionUser) {
+        if (-not (Get-LocalUser -Name $name -ErrorAction SilentlyContinue)) { continue }
+        & icacls $dir.FullName /deny "${name}:(OI)(CI)RX" /Q | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Couldn't block OneDrive for $name (icacls exit $LASTEXITCODE)" }
+    }
+    Write-Host "Blocked for $($settings.SharedUser) and $($settings.SessionUser)."
+}
+
+# A Start menu shortcut an installer made: the first pattern with a match wins; an exact name beats
+# a wildcard match, and a shorter name beats a longer one.
+function Find-StartMenuShortcut([string[]]$Patterns, $Candidates) {
+    foreach ($pattern in $Patterns) {
+        $exact = @($Candidates | Where-Object { $_.BaseName -eq $pattern })
+        if ($exact.Count) { return $exact[0] }
+        $like = @($Candidates | Where-Object { $_.BaseName -like $pattern } | Sort-Object { $_.BaseName.Length })
+        if ($like.Count) { return $like[0] }
+    }
+    $null
+}
+
+# The desktop folders and Start > CBR, rebuilt from the manifest on every run, plus the note.
+function Set-Shortcuts {
+    $desktop = Get-PublicDesktop
+    $startMenu = Get-CbrStartMenu
+    $shell = New-Object -ComObject WScript.Shell
+    # Start menu shortcuts made by installers: for all users, or for this admin if they point
+    # somewhere every account can reach.
+    $allUsers = 'C:\ProgramData\Microsoft\Windows\Start Menu\Programs'
+    $candidates = @(Get-ChildItem $allUsers -Recurse -Filter *.lnk -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -notlike "$startMenu\*" })
+    $candidates += @(Get-ChildItem (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs') -Recurse -Filter *.lnk -ErrorAction SilentlyContinue |
+        Where-Object { $target = $shell.CreateShortcut($_.FullName).TargetPath; $target -and $target -notlike 'C:\Users\*' })
+
+    $plan = New-Object System.Collections.Generic.List[hashtable]
+    $missing = @()
+    foreach ($app in $manifest.Apps) {
+        $sc = $app.Shortcut
+        if (-not $sc -or (Get-AppStatus $app).Status -eq 'MISSING') { continue }
+        $entry = @{ Folder = $sc.Folder; Name = $(if ($sc.Name) { $sc.Name } else { $app.Name }) }
+        $source = $(if ($sc.StartMenu) { Find-StartMenuShortcut @($sc.StartMenu) $candidates } else { $null })
+        $target = $(if ($sc.Target) { @(Get-Item $sc.Target -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending)[0] } else { $null })
+        if ($source) {
+            $entry.Source = $source.FullName
+            $entry.SourceName = $source.BaseName
+        } elseif ($target) {
+            $entry.Target = $target.FullName
+        } elseif ($sc.UserTarget) {
+            # Installed into each person's own profile: cmd fills in their own folder when it's opened.
+            $entry.Target = "$env:SystemRoot\System32\cmd.exe"
+            $entry.Arguments = "/c start `"`" `"$($sc.UserTarget)`""
+            $entry.Style = 7
+            $icon = $(if ($sc.Icon) { @(Get-Item $sc.Icon -ErrorAction SilentlyContinue)[0] } else { $null })
+            if ($icon) { $entry.Icon = "$($icon.FullName),0" }
+        } else {
+            $missing += "$($entry.Name) (no Start menu shortcut called $(@($sc.StartMenu) -join ' or '))"
+            continue
+        }
+        $plan.Add($entry)
+    }
+    $powershell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+    $plan.Add(@{ Folder = 'Code'; Name = 'Terminal'; Target = "$env:SystemRoot\explorer.exe"
+                 Arguments = 'shell:AppsFolder\Microsoft.WindowsTerminal_8wekyb3d8bbwe!App'; Icon = "$env:SystemRoot\System32\cmd.exe,0" })
+    $plan.Add(@{ Folder = 'Code'; Name = 'Ubuntu'; Target = "$env:SystemRoot\System32\wsl.exe"; Arguments = "-d $($settings.WslDistro) --cd ~" })
+    $plan.Add(@{ Folder = 'Code'; Name = 'Set up Ubuntu & Docker'; Target = $powershell; Icon = "$env:SystemRoot\System32\wsl.exe,0"
+                 Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $PSScriptRoot 'user-setup.ps1')`" -Window" })
+
+    # Rebuilt from scratch, so they always match the manifest. A hidden .cbr file marks our folders.
+    foreach ($root in $desktop, $startMenu) {
+        New-Item -ItemType Directory -Force -Path $root | Out-Null
+        foreach ($old in Get-ChildItem $root -Directory -ErrorAction SilentlyContinue) {
+            if (Test-Path (Join-Path $old.FullName '.cbr')) { Remove-Item $old.FullName -Recurse -Force }
+        }
+        foreach ($folder in $settings.ShortcutFolders) {
+            $dir = Join-Path $root $folder
+            New-Item -ItemType Directory -Force -Path $dir | Out-Null
+            $flag = New-Item -ItemType File -Force -Path (Join-Path $dir '.cbr')
+            $flag.Attributes = 'Hidden'
+        }
+        foreach ($entry in $plan) {
+            $path = Join-Path (Join-Path $root $entry.Folder) "$($entry.Name).lnk"
+            if ($entry.Source) { Copy-Item $entry.Source $path -Force }
+            else {
+                $style = $(if ($entry.Style) { $entry.Style } else { 1 })
+                New-CbrShortcut -Path $path -Target $entry.Target -Arguments $entry.Arguments -Icon $entry.Icon -WindowStyle $style
+            }
+        }
+    }
+    # Loose shortcuts installers dropped on the shared desktop: they're in the folders now.
+    Get-ChildItem $desktop -Filter *.lnk -File -ErrorAction SilentlyContinue | Remove-Item -Force
+    # The sign-in script removes these names from people's own desktops too (per-user installers).
+    New-Item -ItemType Directory -Force -Path 'C:\ProgramData\CBR' | Out-Null
+    Set-Content 'C:\ProgramData\CBR\desktop-tidy.txt' @($plan | ForEach-Object { $_.Name; $_.SourceName } | Where-Object { $_ } | Sort-Object -Unique)
+
+    # The "How to use this PC" note, with this PC's name and the folders as they are now.
+    $folderList = foreach ($folder in $settings.ShortcutFolders) {
+        $names = @($plan | Where-Object { $_.Folder -eq $folder } | ForEach-Object { $_.Name } | Sort-Object)
+        if ($names.Count) { "<li><strong>$([Net.WebUtility]::HtmlEncode($folder)):</strong> $([Net.WebUtility]::HtmlEncode($names -join ', '))</li>" }
+    }
+    $html = Get-Content (Join-Path (Get-CbrRepoRoot) 'config\how-to-use-this-pc.html') -Raw
+    $html = $html.Replace('{{COMPUTER}}', $machineEntry.ComputerName)
+    $html = $html.Replace('{{FOLDERS}}', ($folderList -join "`n"))
+    $html = $html.Replace('{{UPDATED}}', (Get-Date -Format 'd MMMM yyyy'))
+    [IO.File]::WriteAllText((Get-NotePath), $html, (New-Object Text.UTF8Encoding $false))
+    New-CbrShortcut -Path (Join-Path $startMenu 'How to use this PC.lnk') -Target (Get-NotePath)
+
+    Write-Host "$($plan.Count) shortcuts in $(@($settings.ShortcutFolders).Count) folders, on the desktop and in Start > CBR, plus the note."
+    if ($missing.Count) {
+        Write-Host 'No shortcut made for:' -ForegroundColor Yellow
+        $missing | ForEach-Object { Write-Host " - $_" -ForegroundColor Yellow }
+        Write-Host "Find the app in Start, right-click it and choose Open file location, and tell me the shortcut's name." -ForegroundColor Yellow
+    }
+}
+
+# Runs one Windows setting step. A failure is reported and recorded, and the next step still runs.
 function Invoke-Step([string]$Title, [scriptblock]$Body) {
     Write-Step $Title
     try { & $Body }
@@ -228,43 +446,67 @@ function Invoke-SystemConfig {
         } else { Write-Host "Already $($machineEntry.ComputerName)." }
     }
 
-    Invoke-Step "Repo folder permissions (staff can read the scripts, only admins can change them)" {
-        # Set the permissions on C:\CBR itself only, then make everything inside inherit them.
+    Invoke-Step "Folder permissions: staff can read the scripts; logs and installers are admin-only" {
+        # Set the permissions on C:\CBR itself only, then make the repo inherit them.
         # (Granting them file by file with icacls /T left files unreadable, even to admins.)
         $root = Split-Path $settings.RepoPath -Parent
         & icacls $root /inheritance:r /grant:r 'Administrators:(OI)(CI)F' 'SYSTEM:(OI)(CI)F' 'Users:(OI)(CI)RX' /Q | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "Setting permissions on $root failed (icacls exit $LASTEXITCODE)" }
-        & icacls "$root\*" /reset /T /C /Q | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "Resetting permissions inside $root failed (icacls exit $LASTEXITCODE)" }
+        & icacls $settings.RepoPath /reset /T /C /Q | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Resetting permissions on $($settings.RepoPath) failed (icacls exit $LASTEXITCODE)" }
         # Git needs to read its own files; fail loudly here rather than at the next update.
         Get-Content (Join-Path $settings.RepoPath '.git\HEAD') -ErrorAction Stop | Out-Null
+        # The logs (including the account audit, with people's names) and the installer cache.
+        foreach ($dir in $logDir, $settings.InstallerCache) {
+            New-Item -ItemType Directory -Force -Path $dir | Out-Null
+            & icacls $dir /inheritance:r /grant:r 'Administrators:(OI)(CI)F' 'SYSTEM:(OI)(CI)F' /Q | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "Setting permissions on $dir failed (icacls exit $LASTEXITCODE)" }
+            if (Get-ChildItem $dir -Force -ErrorAction SilentlyContinue) { & icacls "$dir\*" /reset /T /C /Q | Out-Null }
+        }
         Write-Host 'Done; the repo is still readable.'
     }
 
-    Invoke-Step "Shared staff account '$($settings.SharedUser)'" {
-        if (-not (Get-LocalUser -Name $settings.SharedUser -ErrorAction SilentlyContinue)) {
-            $pw = Read-NewPassword "the new '$($settings.SharedUser)' account"
-            New-LocalUser -Name $settings.SharedUser -Password $pw -PasswordNeverExpires -FullName 'CBR Staff' | Out-Null
-            Add-LocalGroupMember -Group 'Users' -Member $settings.SharedUser
-            Write-Host "Created as a standard user."
-        } else {
-            $isAdmin = Get-LocalGroupMember -Group 'Administrators' -ErrorAction SilentlyContinue |
-                Where-Object { $_.Name -like "*\$($settings.SharedUser)" }
-            if ($isAdmin) { Write-Warning "$($settings.SharedUser) is an administrator. It should be a standard user." }
-            else { Write-Host "Exists, standard user." }
+    foreach ($account in @(
+            @{ Name = $settings.SharedUser;  FullName = 'CBR Staff';   Description = 'Shared drop-in account.' }
+            @{ Name = $settings.SessionUser; FullName = 'CBR Session'; Description = 'Shared account for sessions; reset from the Accounts menu.' })) {
+        Invoke-Step "Shared account '$($account.Name)' ($($account.FullName))" {
+            if (-not (Get-LocalUser -Name $account.Name -ErrorAction SilentlyContinue)) {
+                $pw = Read-NewPassword "the new '$($account.Name)' account"
+                New-LocalUser -Name $account.Name -Password $pw -PasswordNeverExpires -FullName $account.FullName `
+                    -Description $account.Description | Out-Null
+                Add-LocalGroupMember -Group 'Users' -Member $account.Name
+                Write-Host 'Created as a standard user.'
+            } elseif ((Get-CbrAccountType $account.Name $settings) -eq 'admin') {
+                Write-Warning "$($account.Name) is an administrator. It should be a standard user."
+            } else { Write-Host 'Exists, standard user.' }
         }
     }
 
-    Invoke-Step "WSL and Docker for '$($settings.SharedUser)', at their next sign-in" {
-        $task = 'CBR - staff setup at sign-in'
-        if (Test-Path (Get-StaffSetupMarker)) {
-            Unregister-CbrTask $task
-            Write-Host 'Already done.'
-        } else {
-            Register-CbrSignInTask -Name $task -User $settings.SharedUser -Hidden `
-                -Script (Join-Path $PSScriptRoot 'user-setup.ps1') -Arguments '-AtSignIn'
-            Write-Host "It starts by itself the next time $($settings.SharedUser) signs in."
-        }
+    Invoke-Step "At each sign-in: Work folder, the note, a tidy desktop and a disk space check" {
+        # Replaced: Ubuntu and Docker are now set up from Code > Set up Ubuntu & Docker, when someone needs them.
+        Unregister-CbrTask 'CBR - staff setup at sign-in'
+        Register-CbrSignInTask -Name 'CBR - at sign-in' -AllUsers -Hidden -Script (Join-Path $PSScriptRoot 'sign-in.ps1')
+        # Runs as SYSTEM, so it can read everyone's disk use, and tells whoever's signed in if they're
+        # over their warning level.
+        $action = New-ScheduledTaskAction -Execute 'powershell.exe' `
+            -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$(Join-Path $PSScriptRoot 'usage-check.ps1')`""
+        $trigger = New-ScheduledTaskTrigger -AtLogOn
+        $trigger.Delay = 'PT1M'
+        $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+        $options = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+            -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -MultipleInstances IgnoreNew
+        Register-ScheduledTask -TaskName 'CBR - disk space check' -Action $action -Trigger $trigger -Principal $principal `
+            -Settings $options -Force | Out-Null
+        Write-Host 'Done.'
+    }
+
+    Invoke-Step "Hide Switch user, so whoever's signed in signs out (closing their apps) before the next person" {
+        Set-RegistryValue 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' 'HideFastUserSwitching' 1
+    }
+
+    Invoke-Step "Local passwords don't expire (people still choose their own at first sign-in)" {
+        & net.exe accounts /maxpwage:unlimited | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "net accounts failed ($LASTEXITCODE)" }
     }
 
     Invoke-Step "Region: UK time zone, formats and keyboard" {
@@ -286,8 +528,24 @@ function Invoke-SystemConfig {
         Set-RegistryValue 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' 'ExcludeWUDriversInQualityUpdate' 1
     }
 
-    Invoke-Step "Remove OneDrive" {
-        Remove-OneDrive
+    Invoke-Step "OneDrive: Falmouth accounts only, files downloaded only when opened" {
+        Set-OneDrivePolicies
+    }
+
+    Invoke-Step "Browsers: no running in the background, no Edge startup boost or first-run screens" {
+        Set-BrowserPolicies
+    }
+
+    Invoke-Step "Public folders read-only for everyone except admins" {
+        Lock-PublicFolders
+    }
+
+    Invoke-Step "Disk limits per account (Settings.Quotas)" {
+        Set-DiskQuotas
+    }
+
+    Invoke-Step "Defender: don't scan engine caches and Work folders as they're written (Settings.DefenderExclusions)" {
+        Set-DefenderExclusions
     }
 
     Invoke-Step "Remove preinstalled Store apps (Settings.RemoveAppx in the manifest)" {
@@ -298,7 +556,7 @@ function Invoke-SystemConfig {
         Set-PrivacyPolicies
     }
 
-    Invoke-Step "Per-user settings: new accounts, '$($settings.SharedUser)' and this account" {
+    Invoke-Step "Per-user settings: new accounts and every account that has signed in" {
         Set-AllUserSettings
     }
 
@@ -615,6 +873,14 @@ function Install-UnityEditor($App, $Status) {
     if (-not (Test-Path $editor)) { throw "Unity Hub finished, but there's no editor at $editor. See the Unity Hub output above." }
 }
 
+# After the apps, because installers add shortcuts, startup entries, tasks and extra programs.
+function Invoke-Finish {
+    Invoke-Step "Programs installers added that the build doesn't want (Settings.Unwanted)" { Remove-UnwantedPrograms }
+    Invoke-Step "Background: startup entries and scheduled tasks kept off" { Set-BackgroundOff }
+    Invoke-Step "OneDrive blocked for the shared accounts" { Block-OneDriveForSharedAccounts }
+    Invoke-Step "Desktop and Start menu folders, and the 'How to use this PC' note" { Set-Shortcuts }
+}
+
 function Invoke-Apps {
     $script:Cleanup = New-Object System.Collections.Generic.List[scriptblock]
     try { Invoke-AppList } finally { foreach ($c in $script:Cleanup) { & $c } }
@@ -658,6 +924,7 @@ function Invoke-AppList {
 try {
     if (-not $SkipSystem) { Invoke-SystemConfig }
     if (-not $SkipApps) { Invoke-Apps }
+    Invoke-Finish
 
     Write-Step "Audit"
     & (Join-Path $PSScriptRoot 'audit.ps1')

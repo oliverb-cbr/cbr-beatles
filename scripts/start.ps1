@@ -90,14 +90,11 @@ function Complete-Setup([int]$Code, [string]$ComputerName) {
     Write-Host ''
     Write-Host "$ComputerName is set up." -ForegroundColor Green
     Write-Host 'Anything under "Problems" above still needs sorting; run bootstrap.bat again afterwards.'
-    if (-not (Test-Path (Get-StaffSetupMarker))) {
-        Write-Host ''
-        Write-Host 'Next:' -ForegroundColor Cyan
-        Write-Host " 1. Sign out, then sign in as $($settings.SharedUser). Ubuntu, Docker and GPU support set themselves up"
-        Write-Host '    in a window (10-20 minutes, once only).'
-        Write-Host " 2. Still as $($settings.SharedUser), sign in to Steam, Epic Games, Unity Hub and Meta Quest Developer Hub"
-        Write-Host '    with the shared CBR accounts.'
-    }
+    Write-Host ''
+    Write-Host 'Next:' -ForegroundColor Cyan
+    Write-Host " 1. Sign out, then sign in as $($settings.SharedUser) to check the desktop folders and the note."
+    Write-Host '    Anyone who needs Ubuntu and Docker runs Code > Set up Ubuntu & Docker on the desktop, once.'
+    Write-Host ' 2. Add people from bootstrap.bat > Accounts.'
     Exit-AfterKey
 }
 
@@ -137,8 +134,8 @@ function Invoke-Setup([string]$Name) {
         Write-Host ''
         Write-Host "This turns this PC into $($entry.ComputerName):" -ForegroundColor Cyan
         Write-Host " - renames it $($entry.ComputerName) and restarts it when needed"
-        Write-Host " - creates the shared staff account $($settings.SharedUser) (you choose its password)"
-        Write-Host ' - removes OneDrive and the preinstalled Store apps; turns off adverts and most telemetry'
+        Write-Host " - creates the shared accounts $($settings.SharedUser) and $($settings.SessionUser) (you choose their passwords)"
+        Write-Host ' - removes the preinstalled Store apps; turns off adverts, most telemetry and Switch user'
         Write-Host ' - installs the apps in the manifest. A few open their own installer: click through those.'
         Write-Host " - carries on by itself after each restart, once you sign in as $($settings.AdminUser)"
         Write-Host 'It takes a couple of hours, mostly downloads. Keep the PC plugged in to the network.'
@@ -204,7 +201,8 @@ function Show-Menu {
     if ($thisMachine) {
         $items['1'] = @('Update this PC: apps, settings and any new apps in the manifest', 'update')
         $items['2'] = @('Check this PC against the manifest (changes nothing)', 'audit')
-        $items['3'] = @('Make or refresh the install USB stick', 'usb')
+        $items['3'] = @('Accounts: who has one, space used; add, end, remove, reset the session account', 'accounts')
+        $items['4'] = @('Make or refresh the install USB stick', 'usb')
     } elseif ($fromStick) {
         $items['1'] = @('Set up this PC as a CBR workstation (JOHN, PAUL, GEORGE or RINGO)', 'setup')
         $items['2'] = @('Make or refresh the install USB stick', 'usb')
@@ -231,6 +229,11 @@ switch -Regex ($todo) {
     '^setup$'    { Invoke-Setup (Read-MachineName) }
     '^update$'   { Invoke-Update }
     '^audit$'    { & (Join-Path $PSScriptRoot 'audit.ps1'); Exit-AfterKey }
+    '^accounts$' {
+        try { & (Join-Path $PSScriptRoot 'accounts.ps1') }
+        catch { Write-Host "`n$($_.Exception.Message)" -ForegroundColor Red }
+        Exit-AfterKey
+    }
     '^usb$'      {
         try { & (Join-Path $PSScriptRoot 'make-usb.ps1') }
         catch { Write-Host "`n$($_.Exception.Message)" -ForegroundColor Red; Exit-AfterKey }
@@ -239,6 +242,6 @@ switch -Regex ($todo) {
     default {
         $name = $todo.ToUpper()
         if (@($manifest.Machines | ForEach-Object Name) -contains $name) { Invoke-Setup $name }
-        else { throw "Unknown choice '$todo'. Use JOHN, PAUL, GEORGE, RINGO, usb, update or audit." }
+        else { throw "Unknown choice '$todo'. Use JOHN, PAUL, GEORGE, RINGO, usb, update, audit or accounts." }
     }
 }
