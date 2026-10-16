@@ -343,8 +343,15 @@ function Invoke-SystemConfig {
 function Invoke-Winget([string[]]$Arguments) {
     # --source winget: never the Microsoft Store source, which asks to send the region first.
     $common = @('--exact', '--source', 'winget', '--silent', '--accept-package-agreements', '--accept-source-agreements', '--disable-interactivity')
-    & winget @Arguments @common
-    $code = $LASTEXITCODE
+    # Run as its own process writing straight to the window, however this script was started.
+    # When PowerShell captures winget's output instead, its progress bars come out as garbled
+    # characters and its spinner prints a new line per turn.
+    $argText = (@($Arguments) + $common | ForEach-Object { if ($_ -match '\s') { "`"$_`"" } else { $_ } }) -join ' '
+    $winget = (Get-Command winget -CommandType Application | Select-Object -First 1).Source
+    $p = Start-Process $winget -ArgumentList $argText -NoNewWindow -PassThru
+    $null = $p.Handle   # needed to read ExitCode once it ends
+    $p.WaitForExit()
+    $code = $p.ExitCode
     # 0 = ok; 0x8A15002B = no applicable upgrade; 0x8A150061 = already installed
     $ok = @(0, -1978335189, -1978335135)
     if ($ok -notcontains $code) { throw "winget $($Arguments -join ' ') failed with exit code $code" }

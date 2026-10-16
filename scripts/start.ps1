@@ -24,7 +24,9 @@ param(
     # Empty shows the menu.
     [string]$Action,
     # With 'continue': the machine being set up.
-    [string]$Machine
+    [string]$Machine,
+    # With 'continue': the scripts have just been updated, so don't fetch them again.
+    [switch]$Updated
 )
 
 $ErrorActionPreference = 'Stop'
@@ -155,10 +157,19 @@ function Invoke-Setup([string]$Name) {
 function Resume-Setup([string]$Name) {
     $host.UI.RawUI.WindowTitle = 'CBR setup'
     Write-Host 'Carrying on with setting up this PC after the restart. Leave this window open.' -ForegroundColor Cyan
-    if (-not (Wait-Internet)) { Write-Host "No internet yet; carrying on, but downloads will fail." -ForegroundColor Yellow }
-    else {
-        & $git -C $settings.RepoPath pull --ff-only
-        if ($LASTEXITCODE -ne 0) { Write-Host 'Couldn''t update the scripts; carrying on with this copy.' -ForegroundColor Yellow }
+    if (-not $Updated) {
+        # Get the latest scripts, then hand over to the new copy of this one, so a fix pushed
+        # since the restart applies to this run too.
+        if (-not (Wait-Internet)) { Write-Host "No internet yet; carrying on, but downloads will fail." -ForegroundColor Yellow }
+        else {
+            & $git -C $settings.RepoPath pull --ff-only
+            if ($LASTEXITCODE -ne 0) { Write-Host 'Couldn''t update the scripts; carrying on with this copy.' -ForegroundColor Yellow }
+        }
+        $p = Start-Process powershell.exe -NoNewWindow -PassThru `
+            -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`" -Action continue -Machine $Name -Updated"
+        $null = $p.Handle
+        $p.WaitForExit()
+        exit $p.ExitCode
     }
     $entry = $manifest.Machines | Where-Object { $_.Name -eq $Name }
     Complete-Setup (Invoke-Provision $Name) $entry.ComputerName
